@@ -96,53 +96,20 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
   }
 
   Future<void> _showFinishedSheet(Duration duration) async {
-    final theme = Theme.of(context);
-    await showModalBottomSheet<void>(
-      context: context,
-      isDismissible: false,
-      enableDrag: false,
-      backgroundColor: theme.colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.lg)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.auto_awesome,
-              size: 40,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Ritual complete',
-              style: theme.textTheme.headlineMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'You read ${_maxIndexReached + 1} cards in ${_formatDuration(duration)}.',
-              style: theme.textTheme.bodyLarge,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Done'),
-            ),
-          ],
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 480),
+        reverseTransitionDuration: const Duration(milliseconds: 240),
+        pageBuilder: (ctx, anim, _) => _RitualCompleteScreen(
+          cardsRead: _maxIndexReached + 1,
+          duration: duration,
+          onDone: () => Navigator.of(ctx).pop(),
         ),
+        transitionsBuilder: (_, anim, _, child) {
+          return FadeTransition(opacity: anim, child: child);
+        },
       ),
     );
-  }
-
-  String _formatDuration(Duration d) {
-    if (d.inMinutes < 1) return '${d.inSeconds}s';
-    final m = d.inMinutes;
-    final s = d.inSeconds.remainder(60);
-    return s == 0 ? '${m}m' : '${m}m ${s}s';
   }
 
   @override
@@ -197,9 +164,6 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
                     setState(() {});
                   },
                   onExit: _exit,
-                  progress: items.isEmpty
-                      ? 0
-                      : (_currentIndex + 1) / items.length,
                   currentIndex: _currentIndex,
                   total: items.length,
                 ),
@@ -325,7 +289,6 @@ class _Chrome extends StatelessWidget {
     required this.isMuted,
     required this.onMuteToggle,
     required this.onExit,
-    required this.progress,
     required this.currentIndex,
     required this.total,
   });
@@ -333,7 +296,6 @@ class _Chrome extends StatelessWidget {
   final bool isMuted;
   final VoidCallback onMuteToggle;
   final VoidCallback onExit;
-  final double progress;
   final int currentIndex;
   final int total;
 
@@ -351,7 +313,8 @@ class _Chrome extends StatelessWidget {
             ),
             Expanded(
               child: Center(
-                child: _ProgressBar(progress: progress, total: total),
+                child:
+                    _ProgressBar(currentIndex: currentIndex, total: total),
               ),
             ),
             _ChromeButton(
@@ -398,48 +361,50 @@ class _ChromeButton extends StatelessWidget {
   }
 }
 
+/// Progress indicator. Up to 12 manifestations: render one dot per card,
+/// active card filled and slightly larger. More than that: fall back to a
+/// minimal numeric "current / total" so we don't tile a hundred dots.
 class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({required this.progress, required this.total});
+  const _ProgressBar({required this.currentIndex, required this.total});
 
-  final double progress;
+  final int currentIndex;
   final int total;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 220),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: SizedBox(
-              width: 120,
-              height: 3,
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: Colors.white.withValues(alpha: 0.18),
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
+    if (total <= 0) return const SizedBox.shrink();
+
+    if (total > 12) {
+      return Text(
+        '${currentIndex + 1} / $total',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 13,
+          fontFamily: 'Inter',
+          letterSpacing: 0.4,
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(total, (i) {
+        final isActive = i == currentIndex;
+        final isPast = i < currentIndex;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: isActive ? 18 : 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: isActive || isPast
+                ? Colors.white.withValues(alpha: isActive ? 0.95 : 0.65)
+                : Colors.white.withValues(alpha: 0.28),
+            borderRadius: BorderRadius.circular(3),
           ),
-          const SizedBox(width: 10),
-          Text(
-            '${(progress * total).round()}/$total',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontFamily: 'Inter',
-            ),
-          ),
-        ],
-      ),
+        );
+      }),
     );
   }
 }
@@ -502,6 +467,97 @@ class _ErrorView extends StatelessWidget {
             'Couldn\u2019t load your manifestations:\n$message',
             style: const TextStyle(color: Colors.white),
             textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Full-screen completion view shown after the last card. Same dark, calm
+/// register as the ritual itself — no jarring jump back to a bright sheet.
+class _RitualCompleteScreen extends StatelessWidget {
+  const _RitualCompleteScreen({
+    required this.cardsRead,
+    required this.duration,
+    required this.onDone,
+  });
+
+  final int cardsRead;
+  final Duration duration;
+  final VoidCallback onDone;
+
+  String _formatDuration(Duration d) {
+    if (d.inMinutes < 1) return '${d.inSeconds}s';
+    final m = d.inMinutes;
+    final s = d.inSeconds.remainder(60);
+    return s == 0 ? '${m}m' : '${m}m ${s}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF1F1612),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+          child: Column(
+            children: [
+              const Spacer(flex: 2),
+              Icon(
+                Icons.auto_awesome,
+                size: 56,
+                color: Accents.gold.withValues(alpha: 0.95),
+              ),
+              const SizedBox(height: 28),
+              const Text(
+                'Beautiful.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Fraunces',
+                  fontSize: 36,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'You showed up for $cardsRead manifestation${cardsRead == 1 ? '' : 's'}\nin ${_formatDuration(duration)}.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontFamily: 'Inter',
+                  fontSize: 15,
+                  height: 1.5,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              const Spacer(flex: 3),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.95),
+                    foregroundColor: const Color(0xFF1F1612),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  onPressed: onDone,
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
           ),
         ),
       ),
