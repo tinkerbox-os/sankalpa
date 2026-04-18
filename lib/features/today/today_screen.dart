@@ -92,16 +92,7 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Logo(height: 32),
-        const SizedBox(width: 10),
-        Text(
-          'Sankalpa',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-      ],
-    );
+    return const Logo(height: 36);
   }
 }
 

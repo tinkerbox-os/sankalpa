@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
-import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/models/category.dart';
 import 'package:sankalpa/data/models/manifestation.dart';
 import 'package:sankalpa/data/repositories/category_repository.dart';
@@ -24,13 +23,6 @@ class LibraryScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
-            onPressed: () => ref.read(authControllerProvider).signOut(),
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(
