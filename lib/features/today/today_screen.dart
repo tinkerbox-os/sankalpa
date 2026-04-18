@@ -12,6 +12,7 @@ import 'package:sankalpa/data/repositories/session_repository.dart';
 import 'package:sankalpa/data/repositories/soundscape_repository.dart';
 import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:sankalpa/data/supabase_config.dart';
+import 'package:sankalpa/data/web/install_prompt.dart';
 import 'package:sankalpa/widgets/logo.dart';
 
 /// Home / "Today" screen.
@@ -91,6 +92,7 @@ class TodayScreen extends ConsumerWidget {
                 _LibraryButton(onTap: () => context.go('/library')),
                 const SizedBox(height: 16),
                 const _SoundscapeRow(),
+                const _InstallBanner(),
                 const SizedBox(height: 32),
                 Center(
                   child: TextButton(
@@ -339,6 +341,88 @@ class _UnconfiguredBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Install this app" prompt — shows the captured browser install event on
+/// supported browsers (Chrome/Edge desktop+Android), and never appears once
+/// the app is running standalone. iOS Safari has no programmatic prompt;
+/// users must use Share \u2192 Add to Home Screen, so we silently hide there.
+class _InstallBanner extends ConsumerStatefulWidget {
+  const _InstallBanner();
+
+  @override
+  ConsumerState<_InstallBanner> createState() => _InstallBannerState();
+}
+
+class _InstallBannerState extends ConsumerState<_InstallBanner> {
+  StreamSubscription<void>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    final handle = ref.read(installPromptProvider);
+    _sub = handle?.changes.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final handle = ref.watch(installPromptProvider);
+    if (handle == null || !handle.canPrompt) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Material(
+        color: Accents.gold.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: handle.prompt,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.add_to_home_screen, color: Accents.gold),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Install Sankalpa',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Add to your home screen for one-tap access.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.65),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

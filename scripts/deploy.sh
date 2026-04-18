@@ -28,8 +28,10 @@ fi
 
 echo ">>> Building Flutter web with --base-href=/sankalpa/"
 touch web/.nojekyll
+# pwa-strategy=none: we ship our own web/sw.js (audio + app-shell caching).
 flutter build web \
   --base-href=/sankalpa/ \
+  --pwa-strategy=none \
   --release \
   --dart-define-from-file=supabase.env.json
 

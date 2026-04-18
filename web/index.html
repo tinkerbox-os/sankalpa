@@ -41,5 +41,28 @@
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // Register the custom service worker. Built with `--pwa-strategy=none`
+    // so this is the ONLY SW for the app — handles app-shell caching plus
+    // soundscape audio caching.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        // First, unregister Flutter's auto-generated SW from prior builds
+        // so the new sw.js takes over cleanly.
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          regs.forEach(function (r) {
+            var url = (r.active && r.active.scriptURL) || '';
+            if (url.indexOf('flutter_service_worker') !== -1) {
+              r.unregister();
+            }
+          });
+        }).finally(function () {
+          navigator.serviceWorker.register('sw.js').catch(function (err) {
+            console.warn('SW registration failed:', err);
+          });
+        });
+      });
+    }
+  </script>
 </body>
 </html>
