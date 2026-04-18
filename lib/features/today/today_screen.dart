@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
+import 'package:sankalpa/data/audio/ritual_audio_service.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/repositories/manifestation_repository.dart';
+import 'package:sankalpa/data/repositories/soundscape_repository.dart';
 import 'package:sankalpa/data/supabase_config.dart';
 import 'package:sankalpa/widgets/logo.dart';
 
@@ -21,6 +25,12 @@ class TodayScreen extends ConsumerWidget {
     final manifestations = SupabaseConfig.isConfigured
         ? ref.watch(manifestationsProvider)
         : const AsyncValue<List<dynamic>>.data(<dynamic>[]);
+    // Pre-warm the default soundscape so its URL is in cache when the user
+    // taps Start ritual; we need to call audio.load() inside the tap event
+    // for iOS Safari to permit playback.
+    if (SupabaseConfig.isConfigured) {
+      ref.watch(defaultSoundscapeProvider);
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -50,7 +60,24 @@ class TodayScreen extends ConsumerWidget {
               _RitualCta(
                 manifestations: manifestations,
                 enabled: SupabaseConfig.isConfigured,
-                onStart: () => context.go('/ritual'),
+                onStart: () async {
+                  // iOS Safari blocks audio.play() unless it fires inside
+                  // the same user-gesture tick. Kick off the soundscape
+                  // here (synchronously inside the tap handler) so the
+                  // ritual screen doesn't have to fight the autoplay
+                  // policy from a post-frame callback.
+                  if (SupabaseConfig.isConfigured) {
+                    final sound =
+                        ref.read(defaultSoundscapeProvider).valueOrNull;
+                    if (sound != null) {
+                      unawaited(
+                        ref.read(ritualAudioProvider).load(sound.url),
+                      );
+                    }
+                  }
+                  if (!context.mounted) return;
+                  context.go('/ritual');
+                },
               ),
               if (SupabaseConfig.isConfigured) ...[
                 const SizedBox(height: 16),
