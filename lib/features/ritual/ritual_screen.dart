@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/audio/ritual_audio_service.dart';
 import 'package:sankalpa/data/models/manifestation.dart';
@@ -160,7 +161,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
                 left: 0,
                 right: 0,
                 child: _Chrome(
-                  isMuted: audio.isMuted,
+                  audio: audio,
                   onMuteToggle: () async {
                     await audio.setMuted(muted: !audio.isMuted);
                     setState(() {});
@@ -288,14 +289,14 @@ class _BreathHaloState extends State<_BreathHalo>
 /// Top chrome: exit X (left), progress dots (center), mute toggle (right).
 class _Chrome extends StatelessWidget {
   const _Chrome({
-    required this.isMuted,
+    required this.audio,
     required this.onMuteToggle,
     required this.onExit,
     required this.currentIndex,
     required this.total,
   });
 
-  final bool isMuted;
+  final RitualAudioService audio;
   final VoidCallback onMuteToggle;
   final VoidCallback onExit;
   final int currentIndex;
@@ -319,14 +320,57 @@ class _Chrome extends StatelessWidget {
                     _ProgressBar(currentIndex: currentIndex, total: total),
               ),
             ),
-            _ChromeButton(
-              icon: isMuted ? Icons.volume_off : Icons.volume_up,
-              onTap: onMuteToggle,
-              tooltip: isMuted ? 'Unmute' : 'Mute',
-            ),
+            _MuteButton(audio: audio, onTap: onMuteToggle),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Mute / unmute button with a thin progress ring while audio is buffering.
+///
+/// Uses the player's own state stream so we don't have to plumb loading
+/// state through the chrome props.
+class _MuteButton extends StatelessWidget {
+  const _MuteButton({required this.audio, required this.onTap});
+
+  final RitualAudioService audio;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<PlayerState>(
+      stream: audio.playerStateStream,
+      builder: (context, snap) {
+        final state = snap.data?.processingState;
+        final loading = state == ProcessingState.loading ||
+            state == ProcessingState.buffering;
+        final isMuted = audio.isMuted;
+        return SizedBox(
+          width: 44,
+          height: 44,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (loading)
+                const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(Colors.white70),
+                  ),
+                ),
+              _ChromeButton(
+                icon: isMuted ? Icons.volume_off : Icons.volume_up,
+                onTap: onTap,
+                tooltip: isMuted ? 'Unmute' : 'Mute',
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

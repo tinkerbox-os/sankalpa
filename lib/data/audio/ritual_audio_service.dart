@@ -21,6 +21,17 @@ class RitualAudioService {
 
   bool get isMuted => _muted;
 
+  /// Emits whenever the underlying player's state changes (loading,
+  /// buffering, ready, etc.). The chrome listens to this to show a thin
+  /// progress ring around the mute icon while audio is being fetched.
+  Stream<PlayerState> get playerStateStream => _player.playerStateStream;
+
+  /// Convenience: `true` when the player is downloading/buffering audio.
+  bool get isLoading {
+    final s = _player.processingState;
+    return s == ProcessingState.loading || s == ProcessingState.buffering;
+  }
+
   /// Loads a soundscape URL and starts looping playback (unless muted).
   ///
   /// Safe to call repeatedly with the same URL — no-ops in that case.
