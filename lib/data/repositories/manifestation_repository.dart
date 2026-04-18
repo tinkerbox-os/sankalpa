@@ -85,6 +85,9 @@ class ManifestationRepository {
   Future<void> archive(String id) =>
       update(id: id, status: ManifestationStatus.archived);
 
+  Future<void> restore(String id) =>
+      update(id: id, status: ManifestationStatus.active);
+
   Future<void> markManifested(String id) =>
       update(id: id, status: ManifestationStatus.manifested);
 
@@ -94,6 +97,24 @@ class ManifestationRepository {
         .delete()
         .eq('id', id)
         .eq('user_id', _uid);
+  }
+
+  /// Persists the given list as the new sort order. We assign a strictly
+  /// monotonic `sort_order` (10, 20, 30 \u2026) so future single-item moves can
+  /// fit between neighbours without rewriting every row, but on every reorder
+  /// we re-issue the full sequence to keep things simple.
+  Future<void> reorder(List<String> orderedIds) async {
+    if (orderedIds.isEmpty) return;
+    // Supabase doesn't support multi-row update in one call, so we batch.
+    // Each `update` is independent and RLS-scoped to the current user.
+    await Future.wait([
+      for (var i = 0; i < orderedIds.length; i++)
+        _client
+            .from('manifestations')
+            .update({'sort_order': (i + 1) * 10})
+            .eq('id', orderedIds[i])
+            .eq('user_id', _uid),
+    ]);
   }
 }
 
@@ -107,4 +128,13 @@ final manifestationsProvider =
     FutureProvider<List<Manifestation>>((ref) async {
   ref.watch(currentUserProvider);
   return ref.read(manifestationRepositoryProvider).list();
+});
+
+/// Reactive list of the current user's archived manifestations.
+final archivedManifestationsProvider =
+    FutureProvider<List<Manifestation>>((ref) async {
+  ref.watch(currentUserProvider);
+  return ref
+      .read(manifestationRepositoryProvider)
+      .list(status: ManifestationStatus.archived);
 });

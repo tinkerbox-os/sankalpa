@@ -80,6 +80,8 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
             cardsRead: _maxIndexReached + 1,
             duration: duration,
           );
+      // Refresh the streak on the Today screen.
+      ref.invalidate(streakStatsProvider);
     } on Object {
       // Recording is best-effort; never block the user from exiting.
     }

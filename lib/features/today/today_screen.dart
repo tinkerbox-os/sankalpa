@@ -6,8 +6,11 @@ import 'package:go_router/go_router.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/audio/ritual_audio_service.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
+import 'package:sankalpa/data/models/soundscape.dart';
 import 'package:sankalpa/data/repositories/manifestation_repository.dart';
+import 'package:sankalpa/data/repositories/session_repository.dart';
 import 'package:sankalpa/data/repositories/soundscape_repository.dart';
+import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:sankalpa/data/supabase_config.dart';
 import 'package:sankalpa/widgets/logo.dart';
 
@@ -56,7 +59,11 @@ class TodayScreen extends ConsumerWidget {
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
                 ),
               ),
-              const SizedBox(height: 40),
+              if (SupabaseConfig.isConfigured) ...[
+                const SizedBox(height: 24),
+                _StreakRow(stats: ref.watch(streakStatsProvider)),
+              ],
+              const SizedBox(height: 32),
               _RitualCta(
                 manifestations: manifestations,
                 enabled: SupabaseConfig.isConfigured,
@@ -82,6 +89,8 @@ class TodayScreen extends ConsumerWidget {
               if (SupabaseConfig.isConfigured) ...[
                 const SizedBox(height: 16),
                 _LibraryButton(onTap: () => context.go('/library')),
+                const SizedBox(height: 16),
+                const _SoundscapeRow(),
                 const SizedBox(height: 32),
                 Center(
                   child: TextButton(
@@ -120,6 +129,101 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Logo(height: 36);
+  }
+}
+
+/// Compact streak strip: current streak chip + smaller "longest" / "total" text.
+/// Shows nothing visually when stats are still loading.
+class _StreakRow extends StatelessWidget {
+  const _StreakRow({required this.stats});
+
+  final AsyncValue<StreakStats> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return stats.maybeWhen(
+      data: (s) {
+        if (s.totalDays == 0) {
+          return Text(
+            'No rituals yet — start one below.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
+          );
+        }
+        return Row(
+          children: [
+            _StreakChip(
+              count: s.current,
+              completedToday: s.completedToday,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _summary(s),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      orElse: SizedBox.shrink,
+    );
+  }
+
+  String _summary(StreakStats s) {
+    final parts = <String>[];
+    if (s.longest > s.current && s.longest > 0) {
+      parts.add('Longest ${s.longest}');
+    }
+    parts.add('${s.totalDays} day${s.totalDays == 1 ? '' : 's'} total');
+    return parts.join(' · ');
+  }
+}
+
+class _StreakChip extends StatelessWidget {
+  const _StreakChip({required this.count, required this.completedToday});
+
+  final int count;
+  final bool completedToday;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = completedToday
+        ? Accents.gold
+        : theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            completedToday
+                ? Icons.local_fire_department
+                : Icons.local_fire_department_outlined,
+            size: 16,
+            color: accent,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            count == 0 ? 'Start streak' : '$count-day streak',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -237,5 +341,193 @@ class _UnconfiguredBanner extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Compact row showing the active soundscape with a tap to change it.
+class _SoundscapeRow extends ConsumerWidget {
+  const _SoundscapeRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final current = ref.watch(defaultSoundscapeProvider).valueOrNull;
+    return Material(
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _openPicker(context, ref),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.music_note_outlined,
+                size: 20,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Soundscape',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.55),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      current?.name ?? 'Choosing\u2026',
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openPicker(BuildContext context, WidgetRef ref) async {
+    final theme = Theme.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) {
+        return Consumer(
+          builder: (ctx, sheetRef, _) {
+            final list = sheetRef.watch(soundscapesProvider);
+            final current =
+                sheetRef.watch(defaultSoundscapeProvider).valueOrNull;
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                      child: Text(
+                        'Choose your soundscape',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ),
+                    list.when(
+                      data: (items) => Column(
+                        children: [
+                          for (final s in items)
+                            _SoundscapeTile(
+                              soundscape: s,
+                              selected: s.id == current?.id,
+                              onTap: () async {
+                                await sheetRef
+                                    .read(userProfileRepositoryProvider)
+                                    .updateSettings({
+                                  'default_soundscape_id': s.id,
+                                });
+                                sheetRef
+                                  ..invalidate(userProfileProvider)
+                                  ..invalidate(defaultSoundscapeProvider);
+                                if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+                              },
+                            ),
+                        ],
+                      ),
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                      error: (e, _) => Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          'Could not load soundscapes.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _SoundscapeTile extends StatelessWidget {
+  const _SoundscapeTile({
+    required this.soundscape,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Soundscape soundscape;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      leading: Icon(_iconFor(soundscape.kind), color: Accents.gold),
+      title: Text(soundscape.name),
+      subtitle: Text(_subtitleFor(soundscape.kind)),
+      trailing: selected ? const Icon(Icons.check, color: Accents.gold) : null,
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+      selected: selected,
+      selectedTileColor:
+          theme.colorScheme.onSurface.withValues(alpha: 0.04),
+    );
+  }
+
+  IconData _iconFor(SoundscapeKind kind) {
+    switch (kind) {
+      case SoundscapeKind.solfeggio:
+        return Icons.graphic_eq;
+      case SoundscapeKind.nature:
+        return Icons.water_drop_outlined;
+      case SoundscapeKind.music:
+        return Icons.music_note_outlined;
+    }
+  }
+
+  String _subtitleFor(SoundscapeKind kind) {
+    switch (kind) {
+      case SoundscapeKind.solfeggio:
+        return 'Solfeggio frequency';
+      case SoundscapeKind.nature:
+        return 'Nature ambience';
+      case SoundscapeKind.music:
+        return 'Instrumental';
+    }
   }
 }

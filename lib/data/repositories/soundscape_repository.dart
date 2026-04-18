@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/models/soundscape.dart';
+import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Reads soundscape rows for ritual mode.
@@ -53,10 +54,13 @@ final defaultSoundscapeProvider = FutureProvider<Soundscape?>((ref) async {
   final list = await ref.watch(soundscapesProvider.future);
   if (list.isEmpty) return null;
 
-  // For Phase 1 we don't yet read the user_profiles.settings row, so we
-  // simply pick the first system soundscape. The profile-based override is
-  // a small follow-up once the settings UI exists.
-  final systemFirst =
-      list.firstWhere((s) => s.isSystem, orElse: () => list.first);
-  return systemFirst;
+  final profile = await ref.watch(userProfileProvider.future);
+  final preferredId = profile?.settings.defaultSoundscapeId;
+  if (preferredId != null) {
+    final match =
+        list.where((s) => s.id == preferredId).cast<Soundscape?>().firstOrNull;
+    if (match != null) return match;
+  }
+
+  return list.firstWhere((s) => s.isSystem, orElse: () => list.first);
 });

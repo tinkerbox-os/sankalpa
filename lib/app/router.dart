@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/supabase_config.dart';
 import 'package:sankalpa/features/auth/sign_in_screen.dart';
+import 'package:sankalpa/features/library/archive_screen.dart';
 import 'package:sankalpa/features/library/library_screen.dart';
 import 'package:sankalpa/features/ritual/ritual_screen.dart';
 import 'package:sankalpa/features/today/today_screen.dart';
@@ -53,6 +54,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/library',
         name: 'library',
         builder: (context, state) => const LibraryScreen(),
+        routes: [
+          GoRoute(
+            path: 'archived',
+            name: 'archive',
+            builder: (context, state) => const ArchiveScreen(),
+          ),
+        ],
       ),
       GoRoute(
         path: '/ritual',
