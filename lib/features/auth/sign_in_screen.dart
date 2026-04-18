@@ -31,8 +31,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       _error = null;
     });
     try {
+      // On web, redirect back to the page the user is on, including the
+      // sub-path (e.g. `/sankalpa/` on GitHub Pages). `Uri.base.origin`
+      // alone strips the path and breaks deploys served under a sub-path.
       final redirect = kIsWeb
-          ? Uri.base.origin
+          ? '${Uri.base.origin}${Uri.base.path}'
           : 'io.tinkerbox.sankalpa://auth-callback';
       await ref.read(authControllerProvider).sendMagicLink(
             email: _emailCtrl.text,
