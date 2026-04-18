@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
+import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/supabase_config.dart';
 import 'package:sankalpa/widgets/logo.dart';
 
@@ -71,11 +73,30 @@ class TodayScreen extends ConsumerWidget {
               const SizedBox(height: 48),
               Center(
                 child: FilledButton(
-                  onPressed: () {},
-                  child: const Text('Start ritual (coming soon)'),
+                  onPressed: SupabaseConfig.isConfigured
+                      ? () => context.go('/ritual')
+                      : null,
+                  child: const Text('Start ritual'),
                 ),
               ),
               const SizedBox(height: 12),
+              if (SupabaseConfig.isConfigured) ...[
+                Center(
+                  child: OutlinedButton.icon(
+                    onPressed: () => context.go('/library'),
+                    icon: const Icon(Icons.library_books_outlined),
+                    label: const Text('Open library'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: () =>
+                        ref.read(authControllerProvider).signOut(),
+                    child: const Text('Sign out'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

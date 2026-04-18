@@ -5,6 +5,10 @@ analyzer:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
     - build/**
+  errors:
+    # freezed + json_serializable place JsonKey on factory params which the
+    # analyzer flags but works fine at codegen time. Cosmetic.
+    invalid_annotation_target: ignore
 
 linter:
   rules:
