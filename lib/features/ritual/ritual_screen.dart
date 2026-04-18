@@ -70,6 +70,10 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
   Future<void> _finish(int total) async {
     if (_completed) return;
     _completed = true;
+    // Stop the soundscape immediately on completion. dispose() will also
+    // call stop(), but on Flutter web the navigation away from this route
+    // can lag behind, so the music keeps playing for a beat. Belt + braces.
+    await ref.read(ritualAudioProvider).stop();
     final duration = DateTime.now().difference(_startedAt);
     try {
       await ref.read(sessionRepositoryProvider).recordCompleted(
@@ -81,6 +85,12 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     }
     if (!mounted) return;
     await _showFinishedSheet(duration);
+    if (!mounted) return;
+    context.go('/');
+  }
+
+  Future<void> _exit() async {
+    await ref.read(ritualAudioProvider).stop();
     if (!mounted) return;
     context.go('/');
   }
@@ -172,18 +182,27 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
                   onTap: () => _advance(items.length),
                 ),
               ),
-              _Chrome(
-                isMuted: audio.isMuted,
-                onMuteToggle: () async {
-                  await audio.setMuted(muted: !audio.isMuted);
-                  setState(() {});
-                },
-                onExit: () => context.go('/'),
-                progress: items.isEmpty
-                    ? 0
-                    : (_currentIndex + 1) / items.length,
-                currentIndex: _currentIndex,
-                total: items.length,
+              // Pin chrome to the top. Without explicit Positioned the
+              // unpositioned Stack child fills the available space and the
+              // Row's default crossAxis center alignment drops the buttons
+              // straight onto the manifestation text.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _Chrome(
+                  isMuted: audio.isMuted,
+                  onMuteToggle: () async {
+                    await audio.setMuted(muted: !audio.isMuted);
+                    setState(() {});
+                  },
+                  onExit: _exit,
+                  progress: items.isEmpty
+                      ? 0
+                      : (_currentIndex + 1) / items.length,
+                  currentIndex: _currentIndex,
+                  total: items.length,
+                ),
               ),
             ],
           );
