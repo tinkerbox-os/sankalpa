@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/sankalpa/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Sankalpa — a daily ritual for your manifestations.">
+  <meta name="theme-color" content="#EADFD0">
+
+  <!-- iOS / installable web app -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Sankalpa">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-precomposed.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png"/>
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Sankalpa">
+  <meta property="og:description" content="A daily ritual for your manifestations.">
+  <meta property="og:type" content="website">
+
+  <title>Sankalpa</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // PWA is paused for now. To eliminate stale-bundle bugs while we finish
+    // stabilising the app, aggressively unregister any existing service
+    // worker for this origin and wipe Sankalpa/Flutter caches, then let the
+    // app run as a plain web app with fresh network loads.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async function () {
+        const cleanupKey = 'sankalpa-sw-cleaned-v1';
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(function (r) { return r.unregister(); }));
+
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(
+              keys
+                .filter(function (key) {
+                  return key.indexOf('sankalpa-') === 0 ||
+                    key.indexOf('flutter-app-cache') !== -1 ||
+                    key.indexOf('flutter-temp-cache') !== -1 ||
+                    key.indexOf('flutter_assets') !== -1;
+                })
+                .map(function (key) { return caches.delete(key); }),
+            );
+          }
+
+          // Force exactly one clean reload after cache cleanup so the page
+          // immediately reboots from the network instead of continuing to run
+          // the stale JS bundle that was already in memory.
+          if (!sessionStorage.getItem(cleanupKey)) {
+            sessionStorage.setItem(cleanupKey, '1');
+            window.location.reload();
+          }
+        } catch (err) {
+          console.warn('SW cleanup failed:', err);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
