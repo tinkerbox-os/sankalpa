@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:sankalpa/app/platform/browser_theme_color.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/audio/ritual_audio_service.dart';
 import 'package:sankalpa/data/errors/app_error.dart';
@@ -38,6 +39,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
   int _currentIndex = 0;
   int _maxIndexReached = 0;
   bool _completed = false;
+  String? _chromeThemeId;
 
   @override
   void initState() {
@@ -60,10 +62,49 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
   @override
   void dispose() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _setSystemChrome(CreamPalette.bg);
     _pageCtrl.dispose();
     // Stop music when leaving (don't dispose the service - it's a singleton).
     ref.read(ritualAudioProvider).stop();
     super.dispose();
+  }
+
+  void _syncSystemChrome(String themeId) {
+    if (_chromeThemeId == themeId) return;
+    _chromeThemeId = themeId;
+    final color = CardBackdropTheme.fromId(themeId).bg;
+
+    // Changing browser metadata while Flutter is building can race the web
+    // engine's own DOM updates. Apply it immediately after this frame; the id
+    // guard prevents an older queued update winning if the provider changes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _chromeThemeId != themeId) return;
+      _setSystemChrome(color);
+    });
+  }
+
+  void _setSystemChrome(Color color) {
+    setBrowserThemeColor(_cssColor(color));
+    final iconBrightness =
+        color.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light;
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: color,
+        statusBarIconBrightness: iconBrightness,
+        // iOS describes the bar background rather than its icons, so this is
+        // intentionally the inverse of statusBarIconBrightness.
+        statusBarBrightness: iconBrightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark,
+        systemNavigationBarColor: color,
+        systemNavigationBarIconBrightness: iconBrightness,
+      ),
+    );
+  }
+
+  String _cssColor(Color color) {
+    final rgb = color.toARGB32() & 0x00FFFFFF;
+    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
   }
 
   Future<void> _onPageChanged(int i) async {
@@ -139,6 +180,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     final audio = ref.watch(ritualAudioProvider);
     final globalThemeId =
         ref.watch(globalCardThemeIdProvider).valueOrNull ?? 'chocolate';
+    _syncSystemChrome(globalThemeId);
 
     // Kick off the default soundscape once it resolves. Idempotent — load()
     // no-ops if the URL is unchanged.
