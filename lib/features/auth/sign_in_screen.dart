@@ -48,48 +48,40 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   // Supabase enforces a per-email cooldown between code sends
-  // (`over_email_send_rate_limit`). We track the local end-time so the
+  // (`over_email_send_rate_limit`). We track the remaining seconds so the
   // Resend button can show a live countdown instead of letting the user
   // tap it and get the raw API error.
-  DateTime? _resendCooldownUntil;
+  //
+  // This is a ValueNotifier rather than setState-driven state on purpose: the
+  // ticker fires once a second, and rebuilding the whole screen that often
+  // tears down and re-creates the code TextField's platform input, which drops
+  // focus and closes the keyboard on web. Only the button listens.
+  final _cooldownSeconds = ValueNotifier<int>(0);
   Timer? _cooldownTicker;
 
   @override
   void dispose() {
     _cooldownTicker?.cancel();
+    _cooldownSeconds.dispose();
     _emailCtrl.dispose();
     _codeCtrl.dispose();
     _codeFocus.dispose();
     super.dispose();
   }
 
-  int get _cooldownSeconds {
-    final until = _resendCooldownUntil;
-    if (until == null) return 0;
-    final remaining = until.difference(DateTime.now()).inSeconds;
-    return remaining > 0 ? remaining : 0;
-  }
-
   void _startCooldown(Duration d) {
     _cooldownTicker?.cancel();
-    setState(() => _resendCooldownUntil = DateTime.now().add(d));
+    _cooldownSeconds.value = d.inSeconds;
     _cooldownTicker = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) {
-        t.cancel();
-        return;
-      }
-      if (_cooldownSeconds <= 0) {
-        t.cancel();
-        setState(() => _resendCooldownUntil = null);
-      } else {
-        setState(() {});
-      }
+      final remaining = _cooldownSeconds.value - 1;
+      _cooldownSeconds.value = remaining > 0 ? remaining : 0;
+      if (remaining <= 0) t.cancel();
     });
   }
 
   Future<void> _send() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    if (_cooldownSeconds > 0) return;
+    if (_cooldownSeconds.value > 0) return;
     setState(() {
       _sending = true;
       _error = null;
@@ -110,7 +102,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       // cooldown immediately on a successful send so users don't trip
       // the rate limit by impatiently tapping "Resend".
       _startCooldown(const Duration(seconds: 60));
+      final wasResend = _sent;
       setState(() => _sent = true);
+      if (wasResend) {
+        // The new code invalidates the previous one, so don't leave a stale
+        // code in the field for the user to submit. Re-focus after the frame
+        // that clears `_sending`, so the rebuild can't drop the keyboard.
+        _codeCtrl.clear();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _codeFocus.requestFocus();
+        });
+      }
     } on Object catch (e, st) {
       if (!mounted) return;
       final error = AppError.from(e, st);
@@ -153,8 +155,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       if (error.kind == AppErrorKind.invalidCode) {
         _codeCtrl.clear();
         // Verifying via the Sign in button drops focus, which would leave the
-        // user tapping back into an empty field to retype.
-        _codeFocus.requestFocus();
+        // user tapping back into an empty field to retype. Wait for the frame
+        // that re-enables the field: a disabled TextField refuses focus, so
+        // requesting it before `_verifying` clears is silently dropped.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _codeFocus.requestFocus();
+        });
       }
       setState(() => _error = error);
     } finally {
@@ -293,7 +299,7 @@ class _CodeEntry extends StatelessWidget {
   final bool verifying;
   final bool sending;
   final AppError? error;
-  final int cooldownSeconds;
+  final ValueListenable<int> cooldownSeconds;
   final VoidCallback onVerify;
   final VoidCallback onResend;
   final VoidCallback onUseDifferentEmail;
@@ -390,15 +396,17 @@ class _CodeEntry extends StatelessWidget {
           alignment: WrapAlignment.center,
           spacing: 4,
           children: [
-            TextButton(
-              onPressed:
-                  (sending || cooldownSeconds > 0) ? null : onResend,
-              child: Text(
-                sending
-                    ? 'Resending\u2026'
-                    : cooldownSeconds > 0
-                        ? 'Resend in ${cooldownSeconds}s'
-                        : 'Resend code',
+            ValueListenableBuilder<int>(
+              valueListenable: cooldownSeconds,
+              builder: (context, seconds, _) => TextButton(
+                onPressed: (sending || seconds > 0) ? null : onResend,
+                child: Text(
+                  sending
+                      ? 'Resending\u2026'
+                      : seconds > 0
+                          ? 'Resend in ${seconds}s'
+                          : 'Resend code',
+                ),
               ),
             ),
             TextButton(
