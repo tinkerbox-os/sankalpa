@@ -125,6 +125,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   Future<void> _verify() async {
+    // A code is single-use server-side, so firing two verifications for one
+    // user action burns the token: the first consumes it and the second comes
+    // back `otp_expired`, which surfaces as "that code didn't match" on a code
+    // that was perfectly good. Three things can trigger this method — the
+    // auto-submit in `onChanged`, the keyboard's done action, and the Sign in
+    // button — and iOS one-time-code autofill can set the text and submit in
+    // the same gesture, so the guard has to be here rather than per-trigger.
+    if (_verifying) return;
     // Be lenient: strip whitespace/dashes the user may have copied
     // alongside the digits (some email clients add spacing).
     final code = _codeCtrl.text.replaceAll(RegExp('[^0-9]'), '');
