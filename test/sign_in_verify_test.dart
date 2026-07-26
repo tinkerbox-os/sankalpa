@@ -97,7 +97,7 @@ void main() {
   );
 
   testWidgets(
-    'a single gesture verifies the code exactly once',
+    'entering six digits waits for explicit verification',
     (tester) async {
       final auth = _RecordingAuthController(holdVerify: true);
       await _pumpSignIn(tester, auth);
@@ -113,11 +113,17 @@ void main() {
       final codeField = find.byType(TextField).last;
       expect(codeField, findsOneWidget);
 
-      // Setting the text auto-submits at six digits. Fire the keyboard's done
-      // action immediately, with no pump in between, so the field has not yet
-      // rebuilt into its disabled state — exactly the window in which a second
-      // verification could slip through and burn the single-use token.
+      // Filling or autofilling the sixth digit must not create an invisible
+      // attempt before the user taps Sign in. iOS can deliver its one-time-code
+      // autofill callback while the platform editing state is still settling.
       await tester.enterText(codeField, '123456');
+      expect(auth.verifyCalls, 0);
+
+      // Both explicit triggers can still arrive before the field rebuilds
+      // disabled. The re-entrancy guard must keep this to one server request.
+      final signInButton = find.text('Sign in');
+      await tester.ensureVisible(signInButton);
+      await tester.tap(signInButton);
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
 

@@ -358,12 +358,12 @@ class _CodeEntry extends StatelessWidget {
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.oneTimeCode],
           onSubmitted: (_) => onVerify(),
-          // Auto-submit when the user types or pastes a full 6-digit code.
-          // Removes the extra "Sign in" tap when someone pastes from email.
-          onChanged: (v) {
-            final digits = v.replaceAll(RegExp('[^0-9]'), '');
-            if (digits.length >= 6) onVerify();
-          },
+          // Do not auto-submit at six digits. In particular, iOS one-time-code
+          // autofill can invoke onChanged while its platform editing state is
+          // still settling. That creates a hidden verification attempt before
+          // the user taps Sign in, making a subsequent failure look like the
+          // first attempt. Verification is deliberately explicit: the button
+          // below or the keyboard's Done action.
           textAlign: TextAlign.center,
           maxLength: 6,
           style: theme.textTheme.headlineSmall?.copyWith(

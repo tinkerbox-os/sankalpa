@@ -120,9 +120,11 @@ class InlineError extends StatelessWidget {
             color: theme.colorScheme.error,
           ),
         ),
-        // Classified failures already say everything useful; the raw payload
-        // is only worth surfacing when we could not identify the error.
-        if (error.kind == AppErrorKind.unknown)
+        // Keep technical details collapsed, but make them available for every
+        // failure. In particular, Supabase maps several distinct 422 auth
+        // responses to the same friendly invalid-code message; hiding details
+        // there makes a real OTP problem impossible to diagnose from the app.
+        if (error.details.isNotEmpty)
           ErrorDetailsDisclosure(error: error),
       ],
     );
