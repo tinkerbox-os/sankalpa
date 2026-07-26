@@ -34,6 +34,7 @@ class SignInScreen extends ConsumerStatefulWidget {
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _emailCtrl = TextEditingController();
   final _codeCtrl = TextEditingController();
+  final _codeFocus = FocusNode();
   final _formKey = GlobalKey<FormState>();
   bool _sending = false;
   bool _verifying = false;
@@ -59,6 +60,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _cooldownTicker?.cancel();
     _emailCtrl.dispose();
     _codeCtrl.dispose();
+    _codeFocus.dispose();
     super.dispose();
   }
 
@@ -144,7 +146,18 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       // redirect away from /sign-in automatically.
     } on Object catch (e, st) {
       if (!mounted) return;
-      setState(() => _error = AppError.from(e, st));
+      final error = AppError.from(e, st);
+      // A rejected code is dead — clear the field so the next attempt starts
+      // from empty rather than making the user delete six digits by hand.
+      // Only for a rejected code: on a network or server failure the same
+      // digits are still valid and worth retrying as-is.
+      if (error.kind == AppErrorKind.invalidCode) {
+        _codeCtrl.clear();
+        // Verifying via the Sign in button drops focus, which would leave the
+        // user tapping back into an empty field to retype.
+        _codeFocus.requestFocus();
+      }
+      setState(() => _error = error);
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
@@ -194,6 +207,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       _CodeEntry(
                         email: _emailCtrl.text,
                         codeCtrl: _codeCtrl,
+                        codeFocus: _codeFocus,
                         verifying: _verifying,
                         sending: _sending,
                         error: _error,
@@ -267,6 +281,7 @@ class _CodeEntry extends StatelessWidget {
   const _CodeEntry({
     required this.email,
     required this.codeCtrl,
+    required this.codeFocus,
     required this.verifying,
     required this.sending,
     required this.error,
@@ -278,6 +293,7 @@ class _CodeEntry extends StatelessWidget {
 
   final String email;
   final TextEditingController codeCtrl;
+  final FocusNode codeFocus;
   final bool verifying;
   final bool sending;
   final AppError? error;
@@ -315,6 +331,7 @@ class _CodeEntry extends StatelessWidget {
         const SizedBox(height: 24),
         TextField(
           controller: codeCtrl,
+          focusNode: codeFocus,
           enabled: !verifying,
           // Numeric keypad on mobile; long-press still surfaces the
           // system clipboard menu so pasting a code from email works.
