@@ -80,6 +80,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 
   Future<void> _send() async {
+    // Requesting a code invalidates the previous one, so a duplicate send is
+    // worse than wasteful: the user is reading the first email while the second
+    // request has already killed the code in it, and the failure looks like the
+    // code was wrong. Both the email field's keyboard action and the button
+    // call this, and `enabled`/`onPressed` only go inert on the next frame, so
+    // two calls can land before the rebuild. Guard on entry.
+    if (_sending) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_cooldownSeconds.value > 0) return;
     setState(() {
