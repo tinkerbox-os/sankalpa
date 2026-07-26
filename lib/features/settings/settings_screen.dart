@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/audio/ritual_audio_service.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
@@ -171,9 +172,23 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
-    if ((ok ?? false) && context.mounted) {
+    if (!(ok ?? false) || !context.mounted) return;
+
+    try {
       await ref.read(authControllerProvider).signOut();
+    } on Object catch (_) {
+      // gotrue clears the local session and broadcasts signedOut *before* it
+      // calls the server, so the user is signed out here even when revoking the
+      // token remotely fails. There's nothing actionable to show on a screen
+      // we're about to leave, so fall through to the redirect either way.
     }
+
+    // Settings is reached with `context.push`, and the router's redirect
+    // rebuilds the matched location without tearing down an imperatively
+    // pushed page — so relying on the redirect alone left the user looking at
+    // Settings as though the tap did nothing. Navigate explicitly, the same
+    // way FriendlyError's sign-out path does.
+    if (context.mounted) context.go('/sign-in');
   }
 }
 
