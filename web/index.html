@@ -26,10 +26,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Sankalpa">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-precomposed.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png"/>
 
   <!-- Open Graph -->
   <meta property="og:title" content="Sankalpa">
@@ -42,25 +44,41 @@
 <body>
   <script src="flutter_bootstrap.js" async></script>
   <script>
-    // Register the custom service worker. Built with `--pwa-strategy=none`
-    // so this is the ONLY SW for the app — handles app-shell caching plus
-    // soundscape audio caching.
+    // PWA is paused for now. To eliminate stale-bundle bugs while we finish
+    // stabilising the app, aggressively unregister any existing service
+    // worker for this origin and wipe Sankalpa/Flutter caches, then let the
+    // app run as a plain web app with fresh network loads.
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        // First, unregister Flutter's auto-generated SW from prior builds
-        // so the new sw.js takes over cleanly.
-        navigator.serviceWorker.getRegistrations().then(function (regs) {
-          regs.forEach(function (r) {
-            var url = (r.active && r.active.scriptURL) || '';
-            if (url.indexOf('flutter_service_worker') !== -1) {
-              r.unregister();
-            }
-          });
-        }).finally(function () {
-          navigator.serviceWorker.register('sw.js').catch(function (err) {
-            console.warn('SW registration failed:', err);
-          });
-        });
+      window.addEventListener('load', async function () {
+        const cleanupKey = 'sankalpa-sw-cleaned-v1';
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(function (r) { return r.unregister(); }));
+
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(
+              keys
+                .filter(function (key) {
+                  return key.indexOf('sankalpa-') === 0 ||
+                    key.indexOf('flutter-app-cache') !== -1 ||
+                    key.indexOf('flutter-temp-cache') !== -1 ||
+                    key.indexOf('flutter_assets') !== -1;
+                })
+                .map(function (key) { return caches.delete(key); }),
+            );
+          }
+
+          // Force exactly one clean reload after cache cleanup so the page
+          // immediately reboots from the network instead of continuing to run
+          // the stale JS bundle that was already in memory.
+          if (!sessionStorage.getItem(cleanupKey)) {
+            sessionStorage.setItem(cleanupKey, '1');
+            window.location.reload();
+          }
+        } catch (err) {
+          console.warn('SW cleanup failed:', err);
+        }
       });
     }
   </script>

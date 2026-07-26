@@ -28,12 +28,15 @@ fi
 
 echo ">>> Building Flutter web with --base-href=/sankalpa/"
 touch web/.nojekyll
+BUILD_STAMP="$(date -u +%Y%m%d-%H%M)"
+echo "    BUILD_STAMP=$BUILD_STAMP"
 # pwa-strategy=none: we ship our own web/sw.js (audio + app-shell caching).
 flutter build web \
   --base-href=/sankalpa/ \
   --pwa-strategy=none \
   --release \
-  --dart-define-from-file=supabase.env.json
+  --dart-define-from-file=supabase.env.json \
+  --dart-define=BUILD_STAMP="$BUILD_STAMP"
 
 echo ">>> Publishing to gh-pages branch"
 cd build/web

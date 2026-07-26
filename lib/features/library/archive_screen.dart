@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/models/manifestation.dart';
 import 'package:sankalpa/data/repositories/manifestation_repository.dart';
+import 'package:sankalpa/widgets/friendly_error.dart';
 
 /// Lists archived manifestations with restore / delete-forever actions.
 class ArchiveScreen extends ConsumerWidget {
@@ -24,17 +25,9 @@ class ArchiveScreen extends ConsumerWidget {
         child: archived.when(
           loading: () =>
               const Center(child: CircularProgressIndicator.adaptive()),
-          error: (e, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Could not load archive:\n$e',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                ),
-              ),
-            ),
+          error: (e, _) => FriendlyError(
+            error: e,
+            onRetry: () => ref.invalidate(archivedManifestationsProvider),
           ),
           data: (items) {
             if (items.isEmpty) return const _EmptyArchive();

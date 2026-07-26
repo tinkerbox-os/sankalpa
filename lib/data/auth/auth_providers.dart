@@ -45,6 +45,23 @@ class AuthController {
     );
   }
 
+  /// Verifies a 6-digit code from the magic-link email and creates a
+  /// session. Same email also contains a tappable link, so users can
+  /// pick whichever flow works better in their environment.
+  ///
+  /// Throws on bad/expired codes; the sign-in screen surfaces the
+  /// message to the user.
+  Future<void> verifyEmailCode({
+    required String email,
+    required String token,
+  }) async {
+    await _client.auth.verifyOTP(
+      email: email.trim(),
+      token: token.trim(),
+      type: OtpType.email,
+    );
+  }
+
   Future<void> signOut() => _client.auth.signOut();
 }
 

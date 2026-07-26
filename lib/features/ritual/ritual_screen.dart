@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/audio/ritual_audio_service.dart';
@@ -9,6 +12,8 @@ import 'package:sankalpa/data/models/manifestation.dart';
 import 'package:sankalpa/data/repositories/manifestation_repository.dart';
 import 'package:sankalpa/data/repositories/session_repository.dart';
 import 'package:sankalpa/data/repositories/soundscape_repository.dart';
+import 'package:sankalpa/data/repositories/user_profile_repository.dart';
+import 'package:sankalpa/widgets/card_ambient_decoration.dart';
 
 /// Full-screen daily ritual. Auto-plays a soundscape, shows manifestations
 /// one card at a time, and records a `sessions` row on completion.
@@ -38,6 +43,17 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     super.initState();
     _startedAt = DateTime.now();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    // Force a fresh fetch every time the ritual screen opens. Riverpod's
+    // FutureProvider will otherwise hand back the cached AsyncData from
+    // a previous mount, which means a reorder saved in Library wouldn't
+    // show up here until the app is fully restarted. The invalidate
+    // schedules a rebuild + refetch on the next frame, so the user sees
+    // the freshest order possible without an explicit pull-to-refresh
+    // gesture (there isn't one here — the screen is full-bleed).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(ref.refresh(manifestationsProvider.future));
+    });
   }
 
   @override
@@ -120,6 +136,8 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     final manifestations = ref.watch(manifestationsProvider);
     final defaultSound = ref.watch(defaultSoundscapeProvider);
     final audio = ref.watch(ritualAudioProvider);
+    final globalThemeId =
+        ref.watch(globalCardThemeIdProvider).valueOrNull ?? 'chocolate';
 
     // Kick off the default soundscape once it resolves. Idempotent — load()
     // no-ops if the URL is unchanged.
@@ -149,26 +167,36 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
                 onPageChanged: _onPageChanged,
                 itemBuilder: (context, i) => _ManifestationCard(
                   manifestation: items[i],
+                  themeId: globalThemeId,
                   onTap: () => _advance(items.length),
                 ),
               ),
-              // Pin chrome to the top. Without explicit Positioned the
-              // unpositioned Stack child fills the available space and the
-              // Row's default crossAxis center alignment drops the buttons
-              // straight onto the manifestation text.
+              // Hairline progress strip stays pinned to the very top edge
+              // so it reads as a system-level indicator independent of the
+              // controls below.
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: _Chrome(
+                child: _ProgressStrip(
+                  currentIndex: _currentIndex,
+                  total: items.length,
+                ),
+              ),
+              // Controls live at the bottom-right ("I am" pattern): out of
+              // the eye-line for the manifestation text, thumb-reachable on
+              // mobile.
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: _BottomControls(
                   audio: audio,
                   onMuteToggle: () async {
                     await audio.setMuted(muted: !audio.isMuted);
                     setState(() {});
                   },
                   onExit: _exit,
-                  currentIndex: _currentIndex,
-                  total: items.length,
                 ),
               ),
             ],
@@ -183,15 +211,21 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
 class _ManifestationCard extends StatelessWidget {
   const _ManifestationCard({
     required this.manifestation,
+    required this.themeId,
     required this.onTap,
   });
 
   final Manifestation manifestation;
+  final String themeId;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final backdrop = CardBackdropTheme.fromId(manifestation.themeId);
+    final backdrop = CardBackdropTheme.fromId(themeId);
+    final hasImage = manifestation.backdropType == BackdropType.image &&
+        (manifestation.imageUrl?.isNotEmpty ?? false);
+    final textColor = hasImage ? Colors.white : backdrop.text;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -199,22 +233,102 @@ class _ManifestationCard extends StatelessWidget {
         color: backdrop.bg,
         child: Stack(
           children: [
-            const Positioned.fill(child: _BreathHalo()),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 96,
+            // Backdrop layer: photo (if attached) or breath halo on the
+            // theme colour. The photo is darkened with a top→bottom
+            // gradient to keep manifestation text legible regardless of
+            // what was uploaded (sky photos, busy textures, etc.).
+            if (hasImage) ...[
+              Positioned.fill(
+                child: Image.network(
+                  manifestation.imageUrl!,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (ctx, child, progress) {
+                    if (progress == null) return child;
+                    return Center(
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(
+                            Colors.white.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
-                child: Text(
-                  manifestation.text,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: backdrop.text,
-                    fontFamily: 'Fraunces',
-                    fontSize: 32,
-                    height: 1.35,
-                    letterSpacing: 0.2,
+              ),
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x66000000),
+                        Color(0x99000000),
+                        Color(0xCC000000),
+                      ],
+                      stops: [0.0, 0.55, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ] else ...[
+              const Positioned.fill(child: _BreathHalo()),
+              Positioned.fill(
+                child: CardAmbientDecoration(
+                  kind: backdrop.decoration,
+                  color: backdrop.text,
+                ),
+              ),
+              Positioned.fill(
+                child: CardVignette(
+                  dark: backdrop.bg.computeLuminance() < 0.5,
+                ),
+              ),
+            ],
+            // Text fills the screen "I am"-style: large target size,
+            // tight line height, minimal padding — and FittedBox auto-
+            // shrinks long manifestations so they never clip. Bottom
+            // padding leaves clearance for the exit/mute controls.
+            //
+            // GoogleFonts.cormorantGaramond (not raw fontFamily) so the
+            // font is guaranteed registered with the requested weight
+            // before first paint. Garalde-style serif chosen to mirror
+            // the editorial feel of the "I am" affirmation app — wider
+            // letterforms, ball terminals, classical proportions.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 56, 28, 96),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth:
+                          MediaQuery.sizeOf(context).width - 56,
+                    ),
+                    child: Text(
+                      manifestation.text,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cormorantGaramond(
+                        color: textColor,
+                        fontSize: 56,
+                        fontWeight: FontWeight.w500,
+                        height: 1.18,
+                        letterSpacing: 0,
+                        shadows: hasImage
+                            ? const [
+                                Shadow(
+                                  blurRadius: 12,
+                                  color: Color(0xAA000000),
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -286,85 +400,141 @@ class _BreathHaloState extends State<_BreathHalo>
   }
 }
 
-/// Top chrome: exit X (left), progress dots (center), mute toggle (right).
-class _Chrome extends StatelessWidget {
-  const _Chrome({
+/// Bottom-right control cluster: mute toggle + exit X.
+///
+/// "I am"-style: kept low and to the right so the manifestation text
+/// dominates the upper visual field and the controls are within thumb
+/// reach on mobile. Icons are small, translucent, and dressed with a
+/// soft bottom-edge gradient so they remain legible on both light and
+/// dark backdrops without painting a hard chrome bar.
+class _BottomControls extends StatelessWidget {
+  const _BottomControls({
     required this.audio,
     required this.onMuteToggle,
     required this.onExit,
-    required this.currentIndex,
-    required this.total,
   });
 
   final RitualAudioService audio;
   final VoidCallback onMuteToggle;
   final VoidCallback onExit;
-  final int currentIndex;
-  final int total;
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-        child: Row(
-          children: [
-            _ChromeButton(
-              icon: Icons.close,
-              onTap: onExit,
-              tooltip: 'Exit ritual',
-            ),
-            Expanded(
-              child: Center(
-                child:
-                    _ProgressBar(currentIndex: currentIndex, total: total),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Soft gradient lifts the icons off bright/busy backdrops without
+        // drawing a visible bar. IgnorePointer so taps in this band still
+        // reach the PageView for advancing.
+        const IgnorePointer(
+          child: SizedBox(
+            height: 80,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0x00000000),
+                    Color(0x40000000),
+                  ],
+                ),
               ),
             ),
-            _MuteButton(audio: audio, onTap: onMuteToggle),
-          ],
+          ),
         ),
-      ),
+        SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            // Split across the bottom edge: exit on the left (deliberate
+            // reach, mirrors the iOS back-gesture origin), mute on the
+            // right (under the resting thumb for quick toggling without
+            // breaking the ritual flow).
+            child: Row(
+              children: [
+                _ChromeButton(
+                  icon: Icons.close,
+                  onTap: onExit,
+                  tooltip: 'Exit ritual',
+                ),
+                const Spacer(),
+                _MuteButton(audio: audio, onTap: onMuteToggle),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
 /// Mute / unmute button with a thin progress ring while audio is buffering.
 ///
-/// Uses the player's own state stream so we don't have to plumb loading
-/// state through the chrome props.
-class _MuteButton extends StatelessWidget {
+/// Listens to two things:
+///  1. `audio` itself (a `ChangeNotifier`) — fires on mute toggle so the
+///     icon flips immediately.
+///  2. `audio.playerStateStream` — fires while buffering so the spinner
+///     ring shows up around the icon during download.
+class _MuteButton extends StatefulWidget {
   const _MuteButton({required this.audio, required this.onTap});
 
   final RitualAudioService audio;
   final VoidCallback onTap;
 
   @override
+  State<_MuteButton> createState() => _MuteButtonState();
+}
+
+class _MuteButtonState extends State<_MuteButton> {
+  @override
+  void initState() {
+    super.initState();
+    widget.audio.addListener(_onChange);
+  }
+
+  @override
+  void dispose() {
+    widget.audio.removeListener(_onChange);
+    super.dispose();
+  }
+
+  void _onChange() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isMuted = widget.audio.isMuted;
     return StreamBuilder<PlayerState>(
-      stream: audio.playerStateStream,
+      stream: widget.audio.playerStateStream,
       builder: (context, snap) {
         final state = snap.data?.processingState;
-        final loading = state == ProcessingState.loading ||
-            state == ProcessingState.buffering;
-        final isMuted = audio.isMuted;
+        // Only show the buffering ring when audio is actually expected to
+        // be playing — otherwise tapping mute (which pauses) would briefly
+        // flash a spinner.
+        final loading = !isMuted &&
+            (state == ProcessingState.loading ||
+                state == ProcessingState.buffering);
         return SizedBox(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           child: Stack(
             alignment: Alignment.center,
             children: [
               if (loading)
                 const SizedBox(
-                  width: 44,
-                  height: 44,
+                  width: 40,
+                  height: 40,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2,
+                    strokeWidth: 1.5,
                     valueColor: AlwaysStoppedAnimation(Colors.white70),
                   ),
                 ),
               _ChromeButton(
                 icon: isMuted ? Icons.volume_off : Icons.volume_up,
-                onTap: onTap,
+                onTap: widget.onTap,
                 tooltip: isMuted ? 'Unmute' : 'Mute',
               ),
             ],
@@ -391,15 +561,19 @@ class _ChromeButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: Colors.black.withValues(alpha: 0.18),
+        color: Colors.black.withValues(alpha: 0.22),
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: SizedBox(
-            width: 44,
-            height: 44,
-            child: Icon(icon, color: Colors.white, size: 22),
+            width: 40,
+            height: 40,
+            child: Icon(
+              icon,
+              color: Colors.white.withValues(alpha: 0.85),
+              size: 18,
+            ),
           ),
         ),
       ),
@@ -407,11 +581,11 @@ class _ChromeButton extends StatelessWidget {
   }
 }
 
-/// Progress indicator. Up to 12 manifestations: render one dot per card,
-/// active card filled and slightly larger. More than that: fall back to a
-/// minimal numeric "current / total" so we don't tile a hundred dots.
-class _ProgressBar extends StatelessWidget {
-  const _ProgressBar({required this.currentIndex, required this.total});
+/// 2px progress bar pinned to the very top edge. Replaces the row of dots
+/// so we never tile dozens of pips for big libraries and the icons get
+/// their own breathing room on either side of the row.
+class _ProgressStrip extends StatelessWidget {
+  const _ProgressStrip({required this.currentIndex, required this.total});
 
   final int currentIndex;
   final int total;
@@ -419,38 +593,24 @@ class _ProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (total <= 0) return const SizedBox.shrink();
-
-    if (total > 12) {
-      return Text(
-        '${currentIndex + 1} / $total',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 13,
-          fontFamily: 'Inter',
-          letterSpacing: 0.4,
-        ),
-      );
-    }
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(total, (i) {
-        final isActive = i == currentIndex;
-        final isPast = i < currentIndex;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOut,
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          width: isActive ? 18 : 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: isActive || isPast
-                ? Colors.white.withValues(alpha: isActive ? 0.95 : 0.65)
-                : Colors.white.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(3),
+    final fraction = ((currentIndex + 1) / total).clamp(0.0, 1.0);
+    return SizedBox(
+      height: 2,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ColoredBox(color: Colors.white.withValues(alpha: 0.12)),
           ),
-        );
-      }),
+          FractionallySizedBox(
+            widthFactor: fraction,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOut,
+              color: Colors.white.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -506,13 +666,25 @@ class _ErrorView extends StatelessWidget {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: Colors.black,
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(
-          child: Text(
-            'Couldn\u2019t load your manifestations:\n$message',
-            style: const TextStyle(color: Colors.white),
-            textAlign: TextAlign.center,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cloud_off, color: Colors.white70, size: 48),
+              const SizedBox(height: 12),
+              const Text(
+                'Could not load your manifestations.',
+                style: TextStyle(color: Colors.white, fontSize: 18),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () => context.go('/'),
+                child: const Text('Back to home'),
+              ),
+            ],
           ),
         ),
       ),

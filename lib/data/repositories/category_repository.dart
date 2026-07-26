@@ -60,6 +60,14 @@ class CategoryRepository {
         .eq('user_id', _uid);
   }
 
+  Future<void> updateColor(String id, String color) async {
+    await _client
+        .from('categories')
+        .update({'color': color})
+        .eq('id', id)
+        .eq('user_id', _uid);
+  }
+
   Future<void> delete(String id) async {
     await _client
         .from('categories')

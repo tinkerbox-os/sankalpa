@@ -57,15 +57,20 @@ enum CardBackdropTheme {
   ),
   cream(
     id: 'cream',
-    bg: Color(0xFFEADFD0),
+    // Use the slightly deeper `CreamPalette.surface` (not bg) so the
+    // card has contrast against the scaffold, which also paints
+    // CreamPalette.bg. Same warm cream family, just a touch deeper —
+    // keeps text contrast while giving the card real presence on the
+    // home screen Daily ritual CTA.
+    bg: Color(0xFFDCCFBC),
     text: Color(0xFF3E2B26),
-    decoration: CardDecoration.none,
+    decoration: CardDecoration.sparkles,
   ),
   sage(
     id: 'sage',
     bg: Color(0xFF7A8B6F),
     text: Color(0xFFF1E8D4),
-    decoration: CardDecoration.none,
+    decoration: CardDecoration.stars,
   ),
   dusk(
     id: 'dusk',
@@ -77,13 +82,13 @@ enum CardBackdropTheme {
     id: 'ocean',
     bg: Color(0xFF6F8BA1),
     text: Color(0xFFF1E8D4),
-    decoration: CardDecoration.none,
+    decoration: CardDecoration.sparkles,
   ),
   terracotta(
     id: 'terracotta',
     bg: Color(0xFFB87361),
     text: Color(0xFFF1E8D4),
-    decoration: CardDecoration.none,
+    decoration: CardDecoration.sparkles,
   );
 
   const CardBackdropTheme({
@@ -104,7 +109,7 @@ enum CardBackdropTheme {
       );
 }
 
-enum CardDecoration { sparkles, stars, none }
+enum CardDecoration { sparkles, stars, orbs, none }
 
 /// Type scale tokens (font sizes in logical pixels). Pair with `TextStyle`
 /// builders in `sankalpa_theme.dart`.

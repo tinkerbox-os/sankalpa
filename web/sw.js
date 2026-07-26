@@ -13,7 +13,7 @@
 //      cache is manually cleared).
 //   3. Everything else (Supabase auth/REST, etc.): pass through to network.
 
-const APP_CACHE = 'sankalpa-app-v2';
+const APP_CACHE = 'sankalpa-app-v9';
 const AUDIO_CACHE = 'sankalpa-audio-v1';
 const KEEP_CACHES = [APP_CACHE, AUDIO_CACHE];
 

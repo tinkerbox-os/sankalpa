@@ -67,6 +67,7 @@ class StreakStats {
     required this.longest,
     required this.totalDays,
     required this.completedToday,
+    required this.practicedDays,
     this.lastCompletedOn,
   });
 
@@ -114,6 +115,7 @@ class StreakStats {
       longest: longest,
       totalDays: days.length,
       completedToday: completedToday,
+      practicedDays: daysSet,
       lastCompletedOn: days.first,
     );
   }
@@ -123,12 +125,18 @@ class StreakStats {
     longest: 0,
     totalDays: 0,
     completedToday: false,
+    practicedDays: <DateTime>{},
   );
 
   final int current;
   final int longest;
   final int totalDays;
   final bool completedToday;
+
+  /// Set of unique local-calendar days the user has completed at least
+  /// one ritual on. Used to render calendar-style widgets (e.g. the
+  /// weekly strip on the home screen) without re-querying.
+  final Set<DateTime> practicedDays;
   final DateTime? lastCompletedOn;
 }
 
