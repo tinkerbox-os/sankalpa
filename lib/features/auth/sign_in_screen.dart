@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
+import 'package:sankalpa/data/errors/app_error.dart';
+import 'package:sankalpa/widgets/friendly_error.dart';
 import 'package:sankalpa/widgets/logo.dart';
 
 /// Email sign-in. Two paths from the same email:
@@ -35,13 +37,14 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _sending = false;
   bool _verifying = false;
-  String? _error;
+  AppError? _error;
   bool _sent = false;
 
   @override
   void initState() {
     super.initState();
-    _error = widget.initialError;
+    final initial = widget.initialError;
+    _error = initial == null ? null : AppError.hint(initial);
   }
 
   // Supabase enforces a per-email cooldown between magic-link sends
@@ -107,13 +110,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       // the rate limit by impatiently tapping "Resend".
       _startCooldown(const Duration(seconds: 60));
       setState(() => _sent = true);
-    } on Object catch (e) {
+    } on Object catch (e, st) {
       if (!mounted) return;
-      final wait = _rateLimitSeconds(e);
-      if (wait != null) {
-        _startCooldown(Duration(seconds: wait));
-      }
-      setState(() => _error = _humanize(e));
+      final error = AppError.from(e, st);
+      final wait = error.retryAfter;
+      if (wait != null) _startCooldown(wait);
+      setState(() => _error = error);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -124,7 +126,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     // alongside the digits (some email clients add spacing).
     final code = _codeCtrl.text.replaceAll(RegExp('[^0-9]'), '');
     if (code.length < 6) {
-      setState(() => _error = 'Enter the 6-digit code from your email.');
+      setState(
+        () => _error = AppError.hint('Enter the 6-digit code from your email.'),
+      );
       return;
     }
     setState(() {
@@ -138,9 +142,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           );
       // The auth state stream will fire on success and the router will
       // redirect away from /sign-in automatically.
-    } on Object catch (e) {
+    } on Object catch (e, st) {
       if (!mounted) return;
-      setState(() => _error = _humanize(e));
+      setState(() => _error = AppError.from(e, st));
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
@@ -152,46 +156,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       _error = null;
       _codeCtrl.clear();
     });
-  }
-
-  /// Surfaces friendly text for the most common Supabase auth errors;
-  /// falls back to the raw message so the user can still report it.
-  String _humanize(Object e) {
-    final s = e.toString();
-    final wait = _rateLimitSeconds(e);
-    if (wait != null) {
-      return 'Too many requests. Try again in ${wait}s.';
-    }
-    if (s.contains('expired') || s.contains('Token has expired')) {
-      return 'That code has expired — request a new one.';
-    }
-    if (s.contains('invalid') || s.contains('Invalid')) {
-      return 'That code didn\u2019t match. Double-check and try again.';
-    }
-    if (s.contains('Failed host lookup') ||
-        s.contains('SocketException') ||
-        s.contains('Network')) {
-      return 'Network hiccup — check your connection and try again.';
-    }
-    // Strip the framework wrapper and any trailing parenthesised debug
-    // payload (`, statusCode: 429, code: ...`) before showing the raw
-    // message as a last-resort fallback.
-    final cleaned = s
-        .replaceFirst('AuthApiException(message: ', '')
-        .replaceFirst('AuthApiException: ', '')
-        .replaceFirst('Exception: ', '');
-    final commaIdx = cleaned.indexOf(', statusCode:');
-    return commaIdx > 0 ? cleaned.substring(0, commaIdx) : cleaned;
-  }
-
-  /// Pulls the "try again in Ns" hint out of Supabase's
-  /// `over_email_send_rate_limit` error so we can drive a countdown.
-  int? _rateLimitSeconds(Object e) {
-    final s = e.toString();
-    if (!s.contains('rate_limit') && !s.contains('429')) return null;
-    final m = RegExp(r'after (\d+) seconds').firstMatch(s);
-    if (m != null) return int.tryParse(m.group(1)!);
-    return 60;
   }
 
   @override
@@ -262,12 +226,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 12),
-                        Text(
-                          _error!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.error,
-                          ),
-                        ),
+                        InlineError(error: _error!),
                       ],
                       const SizedBox(height: 16),
                       FilledButton(
@@ -321,7 +280,7 @@ class _CodeEntry extends StatelessWidget {
   final TextEditingController codeCtrl;
   final bool verifying;
   final bool sending;
-  final String? error;
+  final AppError? error;
   final int cooldownSeconds;
   final VoidCallback onVerify;
   final VoidCallback onResend;
@@ -398,13 +357,7 @@ class _CodeEntry extends StatelessWidget {
         ),
         if (error != null) ...[
           const SizedBox(height: 8),
-          Text(
-            error!,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.error,
-            ),
-          ),
+          InlineError(error: error!, textAlign: TextAlign.center),
         ],
         const SizedBox(height: 16),
         FilledButton(

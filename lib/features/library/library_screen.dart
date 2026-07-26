@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/audio/ritual_audio_service.dart';
+import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/data/models/category.dart';
 import 'package:sankalpa/data/models/manifestation.dart';
 import 'package:sankalpa/data/repositories/category_repository.dart';
@@ -136,11 +137,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   String _humanizeError(Object e) {
     final s = e.toString();
-    if (s.contains('Not authenticated')) return 'Please sign in again.';
+    // Reorder-specific cases the shared classifier has no way to know about.
     if (s.contains('not owned by user')) {
       return 'Some cards are out of sync. Pull to refresh and retry.';
     }
-    return s.replaceFirst('PostgrestException(', '').replaceFirst('Exception: ', '');
+    return AppError.from(e).message;
   }
 
   @override

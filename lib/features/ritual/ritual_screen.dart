@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/audio/ritual_audio_service.dart';
+import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/data/models/manifestation.dart';
 import 'package:sankalpa/data/repositories/manifestation_repository.dart';
 import 'package:sankalpa/data/repositories/session_repository.dart';
@@ -155,7 +156,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
         loading: () => const Center(
           child: CircularProgressIndicator(color: Colors.white),
         ),
-        error: (e, _) => _ErrorView(message: e.toString()),
+        error: (e, st) => _ErrorView(error: AppError.from(e, st)),
         data: (items) {
           if (items.isEmpty) return const _EmptyRitual();
 
@@ -658,9 +659,9 @@ class _EmptyRitual extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message});
+  const _ErrorView({required this.error});
 
-  final String message;
+  final AppError error;
 
   @override
   Widget build(BuildContext context) {
@@ -675,8 +676,14 @@ class _ErrorView extends StatelessWidget {
               const Icon(Icons.cloud_off, color: Colors.white70, size: 48),
               const SizedBox(height: 12),
               const Text(
-                'Could not load your manifestations.',
+                'Couldn\u2019t load your manifestations.',
                 style: TextStyle(color: Colors.white, fontSize: 18),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error.message,
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),

@@ -10,9 +10,23 @@ void main() {
         child: SankalpaApp(),
       ),
     );
-    await tester.pumpAndSettle();
+    // Not `pumpAndSettle`: the Today screen's `CardAmbientDecoration` drives a
+    // free-running Ticker for its drifting sparkles, so a frame is always
+    // scheduled and the tree never settles. A couple of bounded pumps are
+    // enough to get past first layout.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Sankalpa'), findsWidgets);
-    expect(find.text('Your daily ritual'), findsOneWidget);
+
+    // Tests run without `--dart-define=SUPABASE_URL`, so the app boots in its
+    // unconfigured state: the banner shows and cloud-backed sections are
+    // skipped.
+    expect(find.text('Supabase not configured.'), findsOneWidget);
+    expect(
+      find.text('Take a moment for your manifestations.'),
+      findsOneWidget,
+    );
+    expect(find.text('Start ritual'), findsOneWidget);
   });
 }

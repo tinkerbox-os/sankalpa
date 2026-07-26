@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
+import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/data/models/category.dart';
 import 'package:sankalpa/data/repositories/category_repository.dart';
 import 'package:sankalpa/data/repositories/manifestation_repository.dart';
@@ -163,7 +164,7 @@ class CategoriesScreen extends ConsumerWidget {
     } on Object catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save: $e')),
+        SnackBar(content: Text('Couldn\u2019t save: ${AppError.from(e).message}')),
       );
     }
   }
@@ -220,7 +221,9 @@ class CategoriesScreen extends ConsumerWidget {
     } on Object catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete: $e')),
+        SnackBar(
+          content: Text('Couldn\u2019t delete: ${AppError.from(e).message}'),
+        ),
       );
     }
   }

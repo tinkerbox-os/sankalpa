@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
+import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/data/models/category.dart';
 import 'package:sankalpa/data/repositories/category_repository.dart';
 import 'package:sankalpa/data/repositories/manifestation_repository.dart';
@@ -133,7 +134,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ..invalidate(userProfileProvider);
       if (mounted) context.go('/library');
     } on Object catch (e) {
-      _showError('Could not add starters: $e');
+      _showError('Couldn\u2019t add starters. ${AppError.from(e).message}');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -179,7 +180,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         ..invalidate(userProfileProvider);
       if (mounted) context.go('/');
     } on Object catch (e) {
-      _showError('Could not save: $e');
+      _showError('Couldn\u2019t save. ${AppError.from(e).message}');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

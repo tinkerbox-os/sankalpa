@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
+import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/data/models/category.dart';
 import 'package:sankalpa/data/models/manifestation.dart';
 import 'package:sankalpa/data/repositories/category_repository.dart';
@@ -104,7 +105,10 @@ class _AddEditManifestationScreenState
       });
     } on Object catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Could not load that image: $e');
+      setState(
+        () => _error =
+            'Couldn\u2019t load that image. ${AppError.from(e).message}',
+      );
     }
   }
 
@@ -204,7 +208,7 @@ class _AddEditManifestationScreenState
       Navigator.of(context).pop();
     } on Object catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.toString());
+      setState(() => _error = AppError.from(e).message);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -241,7 +245,7 @@ class _AddEditManifestationScreenState
     } on Object catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = AppError.from(e).message;
         _saving = false;
       });
     }

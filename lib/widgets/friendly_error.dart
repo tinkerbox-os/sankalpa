@@ -1,23 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
+import 'package:sankalpa/data/errors/app_error.dart';
 
-/// Detects whether [error] is a session/auth problem (expired token, signed
-/// out elsewhere, etc.). When true the right recovery action is to sign the
-/// user back in, not to show a stack trace.
-bool isAuthError(Object error) {
-  final s = error.toString();
-  return s.contains('without an active session') ||
-      s.contains('JWT expired') ||
-      s.contains('AuthApiException') ||
-      s.contains('AuthRetryableFetchException') ||
-      s.contains('Invalid Refresh Token');
-}
-
-/// Friendly error panel used by data-fetching screens. Renders a calm
-/// message; if the failure looks auth-related, it offers a one-tap
-/// sign-out so the router redirects to the magic-link screen.
+/// Friendly error panel used by data-fetching screens. Renders calm, classified
+/// copy and offers the recovery that actually matches the failure: signing in
+/// again only for genuine session problems, a plain retry for everything else.
 class FriendlyError extends ConsumerWidget {
   const FriendlyError({
     required this.error,
@@ -31,29 +21,29 @@ class FriendlyError extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final auth = isAuthError(error);
+    final appError = AppError.from(error);
+    final needsSignIn = appError.requiresSignIn;
+
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              auth ? Icons.lock_outline : Icons.cloud_off_outlined,
+              _iconFor(appError.kind),
               size: 48,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
             const SizedBox(height: 12),
             Text(
-              auth ? 'Your session ended' : 'Something went wrong',
+              _titleFor(appError.kind),
               style: theme.textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              auth
-                  ? 'Please sign in again to continue.'
-                  : 'Check your connection and try again.',
+              appError.message,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
@@ -64,7 +54,7 @@ class FriendlyError extends ConsumerWidget {
               spacing: 8,
               alignment: WrapAlignment.center,
               children: [
-                if (auth)
+                if (needsSignIn)
                   FilledButton(
                     onPressed: () async {
                       await ref.read(authControllerProvider).signOut();
@@ -80,9 +70,148 @@ class FriendlyError extends ConsumerWidget {
                   ),
               ],
             ),
+            const SizedBox(height: 8),
+            ErrorDetailsDisclosure(error: appError),
           ],
         ),
       ),
+    );
+  }
+
+  static IconData _iconFor(AppErrorKind kind) => switch (kind) {
+        AppErrorKind.network => Icons.cloud_off_outlined,
+        AppErrorKind.sessionExpired => Icons.lock_outline,
+        AppErrorKind.rateLimited => Icons.hourglass_empty,
+        AppErrorKind.invalidCode => Icons.key_outlined,
+        AppErrorKind.permissionDenied => Icons.no_encryption_gmailerrorred_outlined,
+        AppErrorKind.serverError => Icons.cloud_off_outlined,
+        AppErrorKind.unknown => Icons.error_outline,
+      };
+
+  static String _titleFor(AppErrorKind kind) => switch (kind) {
+        AppErrorKind.network => 'Can\u2019t connect',
+        AppErrorKind.sessionExpired => 'Your session ended',
+        AppErrorKind.rateLimited => 'Slow down a moment',
+        AppErrorKind.invalidCode => 'That code didn\u2019t work',
+        AppErrorKind.permissionDenied => 'No access',
+        AppErrorKind.serverError => 'Server trouble',
+        AppErrorKind.unknown => 'Something went wrong',
+      };
+}
+
+/// Compact inline error for forms, where a full-panel [FriendlyError] would be
+/// too heavy. Shows the classified message with the same details disclosure.
+class InlineError extends StatelessWidget {
+  const InlineError({required this.error, this.textAlign, super.key});
+
+  final AppError error;
+  final TextAlign? textAlign;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          error.message,
+          textAlign: textAlign,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.error,
+          ),
+        ),
+        // Classified failures already say everything useful; the raw payload
+        // is only worth surfacing when we could not identify the error.
+        if (error.kind == AppErrorKind.unknown)
+          ErrorDetailsDisclosure(error: error),
+      ],
+    );
+  }
+}
+
+/// Collapsed technical detail for bug reports. Kept out of the way so the raw
+/// exception text — which embeds request URLs — is never shown unless asked
+/// for.
+class ErrorDetailsDisclosure extends StatefulWidget {
+  const ErrorDetailsDisclosure({required this.error, super.key});
+
+  final AppError error;
+
+  @override
+  State<ErrorDetailsDisclosure> createState() =>
+      _ErrorDetailsDisclosureState();
+}
+
+class _ErrorDetailsDisclosureState extends State<ErrorDetailsDisclosure> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.5);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton(
+          onPressed: () => setState(() => _expanded = !_expanded),
+          style: TextButton.styleFrom(foregroundColor: muted),
+          child: Text(
+            _expanded ? 'Hide details' : 'Details',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+        ),
+        if (_expanded)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420, maxHeight: 180),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        widget.error.details,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                          color: muted,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: widget.error.details),
+                        );
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Details copied'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_all_outlined, size: 16),
+                      label: const Text('Copy'),
+                      style: TextButton.styleFrom(foregroundColor: muted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
