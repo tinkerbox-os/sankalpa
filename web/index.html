@@ -40,8 +40,116 @@
 
   <title>Sankalpa</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Boot splash. Painted by the browser before any Flutter code downloads, so
+    the launch gap shows the brand mark instead of a blank page. Everything
+    here is inline (no extra requests, no webfont) so it renders on the first
+    paint; the real Fraunces wordmark arrives with the app.
+  -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #EADFD0;
+    }
+
+    #sankalpa-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #EADFD0;
+      opacity: 1;
+      transition: opacity 340ms ease-out;
+    }
+
+    #sankalpa-splash.is-hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Soft bloom behind the mark so it reads as ambient light, not a spinner. */
+    #sankalpa-splash .halo {
+      position: absolute;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background: radial-gradient(
+        circle,
+        rgba(200, 162, 75, 0.20) 0%,
+        rgba(200, 162, 75, 0) 70%
+      );
+      animation: sankalpa-bloom 3.2s ease-in-out infinite;
+    }
+
+    #sankalpa-splash .mark {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      animation: sankalpa-breathe 3.2s ease-in-out infinite;
+    }
+
+    @keyframes sankalpa-breathe {
+      0%, 100% { transform: scale(0.92); opacity: 0.62; }
+      50%      { transform: scale(1.06); opacity: 1; }
+    }
+
+    @keyframes sankalpa-bloom {
+      0%, 100% { transform: scale(0.85); opacity: 0.55; }
+      50%      { transform: scale(1.12); opacity: 1; }
+    }
+
+    /* Respect users who ask for reduced motion: hold a calm steady state. */
+    @media (prefers-reduced-motion: reduce) {
+      #sankalpa-splash .mark,
+      #sankalpa-splash .halo {
+        animation: none;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html, body,
+      #sankalpa-splash { background-color: #3E2B26; }
+    }
+  </style>
 </head>
 <body>
+  <div id="sankalpa-splash" role="status" aria-label="Loading Sankalpa">
+    <div class="halo"></div>
+    <svg class="mark" viewBox="0 0 24 24" fill="#C8A24B" aria-hidden="true">
+      <path d="M12 1.5 L13.1 9.6 A2 2 0 0 0 14.4 10.9 L22.5 12 L14.4 13.1
+               A2 2 0 0 0 13.1 14.4 L12 22.5 L10.9 14.4 A2 2 0 0 0 9.6 13.1
+               L1.5 12 L9.6 10.9 A2 2 0 0 0 10.9 9.6 Z"/>
+    </svg>
+  </div>
+
+  <script>
+    // Flutter fires `flutter-first-frame` once the engine has actually painted.
+    // Waiting for that (rather than for the bootstrap script to load) means the
+    // splash never hands over to an empty canvas.
+    (function () {
+      var splash = document.getElementById('sankalpa-splash');
+      if (!splash) return;
+      var done = false;
+
+      function hide() {
+        if (done) return;
+        done = true;
+        splash.classList.add('is-hidden');
+        window.setTimeout(function () {
+          if (splash.parentNode) splash.parentNode.removeChild(splash);
+        }, 400);
+      }
+
+      window.addEventListener('flutter-first-frame', hide);
+      // Never trap the user behind the splash if that event doesn't arrive.
+      window.setTimeout(hide, 20000);
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
   <script>
     // PWA is paused for now. To eliminate stale-bundle bugs while we finish
