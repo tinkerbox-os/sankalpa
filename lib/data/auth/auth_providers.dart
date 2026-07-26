@@ -31,11 +31,18 @@ class AuthController {
 
   final SupabaseClient _client;
 
-  /// Sends a magic-link email. The link, when clicked, redirects back to the
-  /// app with a session cookie attached. On web the redirect URL is the
-  /// current origin; on native it's the deep-link URL configured in the
-  /// Supabase dashboard (set up in the auth task).
-  Future<void> sendMagicLink({
+  /// Emails a 6-digit sign-in code.
+  ///
+  /// The email templates deliberately render only `{{ .Token }}` and no
+  /// `{{ .ConfirmationURL }}`. The link and the code are two views of the same
+  /// token, so redeeming either consumes both — and email security scanners
+  /// prefetch links, silently burning the token before the user can type the
+  /// code. Dropping the link from the email removes that failure entirely.
+  ///
+  /// [redirectTo] is kept so the token still has a correct destination if a
+  /// link is ever reintroduced to the templates; with the current code-only
+  /// emails nothing consumes it.
+  Future<void> sendEmailCode({
     required String email,
     required String redirectTo,
   }) async {
@@ -45,9 +52,7 @@ class AuthController {
     );
   }
 
-  /// Verifies a 6-digit code from the magic-link email and creates a
-  /// session. Same email also contains a tappable link, so users can
-  /// pick whichever flow works better in their environment.
+  /// Verifies the 6-digit code and creates a session.
   ///
   /// Throws on bad/expired codes; the sign-in screen surfaces the
   /// message to the user.

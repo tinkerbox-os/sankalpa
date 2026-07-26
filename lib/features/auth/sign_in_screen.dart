@@ -9,22 +9,21 @@ import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/widgets/friendly_error.dart';
 import 'package:sankalpa/widgets/logo.dart';
 
-/// Email sign-in. Two paths from the same email:
+/// Email sign-in via a 6-digit code.
 ///
-///   1. **Magic link** (default for desktop browsers): one-tap link
-///      redirects back to the app with a session cookie.
-///   2. **6-digit code** (essential for installed PWAs on iOS): the same
-///      email also contains a `{{ .Token }}`. The user types the code
-///      directly into the PWA, no redirect needed — works around the
-///      iOS quirk that opens magic links in Safari instead of the
-///      installed home-screen app.
+/// The email carries only `{{ .Token }}` — no magic link. Two reasons:
+/// magic links open in Safari rather than the installed home-screen app on
+/// iOS, and because the link and the code share one token, email scanners
+/// prefetching the link consumed it before the user could type the code.
+///
+/// The router still handles auth callback URLs so that links from older
+/// emails, and Supabase's error redirects, land somewhere sensible.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key, this.initialError});
 
   /// Pre-populated error shown above the email field on first paint —
-  /// used when the router redirects an expired/invalid magic-link
-  /// callback back here so the user knows why they're being asked to
-  /// sign in again.
+  /// used when the router redirects an expired/invalid auth callback back
+  /// here so the user knows why they're being asked to sign in again.
   final String? initialError;
 
   @override
@@ -48,7 +47,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _error = initial == null ? null : AppError.hint(initial);
   }
 
-  // Supabase enforces a per-email cooldown between magic-link sends
+  // Supabase enforces a per-email cooldown between code sends
   // (`over_email_send_rate_limit`). We track the local end-time so the
   // Resend button can show a live countdown instead of letting the user
   // tap it and get the raw API error.
@@ -96,13 +95,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       _error = null;
     });
     try {
-      // On web, redirect back to the page the user is on, including the
-      // sub-path (e.g. `/sankalpa/` on GitHub Pages). `Uri.base.origin`
-      // alone strips the path and breaks deploys served under a sub-path.
+      // On web, point back at the page the user is on, including the sub-path
+      // (e.g. `/sankalpa/` on GitHub Pages). `Uri.base.origin` alone strips
+      // the path and breaks deploys served under a sub-path.
       final redirect = kIsWeb
           ? '${Uri.base.origin}${Uri.base.path}'
           : 'io.tinkerbox.sankalpa://auth-callback';
-      await ref.read(authControllerProvider).sendMagicLink(
+      await ref.read(authControllerProvider).sendEmailCode(
             email: _emailCtrl.text,
             redirectTo: redirect,
           );
@@ -257,8 +256,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'We\u2019ll email you a 6-digit code (and a magic '
-                        'link). No passwords.',
+                        'We\u2019ll email you a 6-digit code. No passwords.',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodySmall,
                       ),
@@ -274,9 +272,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 }
 
-/// Post-send state: shows the code entry plus quick fallbacks. The same
-/// email also includes a magic link, so users can either type the code
-/// here or tap the link from a desktop browser.
+/// Post-send state: the code field plus resend / change-email fallbacks.
 class _CodeEntry extends StatelessWidget {
   const _CodeEntry({
     required this.email,
@@ -408,15 +404,6 @@ class _CodeEntry extends StatelessWidget {
               child: const Text('Use a different email'),
             ),
           ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'On a desktop browser? You can also tap the link in the same '
-          'email instead of typing the code.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
-          ),
         ),
       ],
     );
