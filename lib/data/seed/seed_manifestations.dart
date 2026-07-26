@@ -28,7 +28,7 @@ const seedManifestations = <SeedManifestation>[
   SeedManifestation(
     text: 'I respond, I do not react.',
     categoryName: 'Self',
-    themeId: 'cream',
+    themeId: 'blush',
   ),
   SeedManifestation(
     text: 'My body is strong, healthy, and full of energy.',

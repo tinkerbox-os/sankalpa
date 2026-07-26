@@ -42,8 +42,8 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Card style'),
             subtitle: Text(
               shuffle
-                  ? 'Today: ${_themeLabel(effectiveThemeId)} \u00b7 shuffling daily'
-                  : _themeLabel(effectiveThemeId),
+                  ? 'Today: ${cardTheme.label} \u00b7 shuffling daily'
+                  : cardTheme.label,
               style: theme.textTheme.bodySmall,
             ),
             leading: Container(
@@ -149,25 +149,6 @@ class SettingsScreen extends ConsumerWidget {
     // to a friendly placeholder for local `flutter run`.
     const stamp = String.fromEnvironment('BUILD_STAMP', defaultValue: 'dev');
     return stamp;
-  }
-
-  String _themeLabel(String id) {
-    switch (id) {
-      case 'chocolate':
-        return 'Chocolate';
-      case 'cream':
-        return 'Cream';
-      case 'sage':
-        return 'Sage';
-      case 'dusk':
-        return 'Dusk';
-      case 'ocean':
-        return 'Ocean';
-      case 'terracotta':
-        return 'Terracotta';
-      default:
-        return id;
-    }
   }
 
   Future<void> _confirmSignOut(BuildContext context, WidgetRef ref) async {

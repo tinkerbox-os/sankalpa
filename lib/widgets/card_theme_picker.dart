@@ -28,7 +28,10 @@ class CardThemePicker {
             final prefs = sheetRef.watch(cardStylePrefsProvider).valueOrNull;
             final currentId = prefs?.themeId ?? 'chocolate';
             return SafeArea(
-              child: Padding(
+              child: SingleChildScrollView(
+                // Seven swatches is four rows, which can outgrow a short
+                // screen in landscape. The grid itself stays unscrollable so
+                // the whole sheet moves as one.
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -147,7 +150,7 @@ class _ThemeSwatch extends StatelessWidget {
               ),
               Center(
                 child: Text(
-                  _label(theme.id),
+                  theme.label,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: theme.text,
@@ -181,24 +184,5 @@ class _ThemeSwatch extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _label(String id) {
-    switch (id) {
-      case 'chocolate':
-        return 'Chocolate';
-      case 'cream':
-        return 'Cream';
-      case 'sage':
-        return 'Sage';
-      case 'dusk':
-        return 'Dusk';
-      case 'ocean':
-        return 'Ocean';
-      case 'terracotta':
-        return 'Terracotta';
-      default:
-        return id;
-    }
   }
 }

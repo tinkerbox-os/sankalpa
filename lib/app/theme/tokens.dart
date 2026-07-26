@@ -48,44 +48,70 @@ abstract final class Accents {
 /// Card backdrop themes — applied per-manifestation when
 /// `backdrop_type = 'theme'`. Named `CardBackdropTheme` to avoid colliding
 /// with Flutter's `CardTheme` ThemeData component.
+///
+/// There are deliberately seven, because `globalCardThemeIdProvider` rotates
+/// with `dayOfYear % values.length` when daily shuffle is on — seven means a
+/// different card colour on every day of the week. Adding or removing a value
+/// changes that rotation, so keep the count at seven unless you mean to.
+///
+/// New ids must also be added to the `manifestations.theme_id` check
+/// constraint in Postgres, or writing a card with that theme will be rejected.
 enum CardBackdropTheme {
   chocolate(
     id: 'chocolate',
+    label: 'Chocolate',
     bg: Color(0xFF4A362D),
     text: Color(0xFFF1E8D4),
     decoration: CardDecoration.sparkles,
   ),
-  cream(
-    id: 'cream',
-    // Use the slightly deeper `CreamPalette.surface` (not bg) so the
-    // card has contrast against the scaffold, which also paints
-    // CreamPalette.bg. Same warm cream family, just a touch deeper —
-    // keeps text contrast while giving the card real presence on the
-    // home screen Daily ritual CTA.
-    bg: Color(0xFFDCCFBC),
+  // Replaces the old `cream` swatch. Cream was CreamPalette.surface, barely a
+  // shade off the CreamPalette.bg scaffold behind it, so choosing it read as
+  // "no theme at all" in light mode. The pastels below stay dusty rather than
+  // candy-bright to sit with the mood-board's muted, warm palette, and are
+  // light enough that `bg.computeLuminance() >= 0.5` — which is what the
+  // vignette and Today-screen CTA use to pick their overlay direction.
+  blush(
+    id: 'blush',
+    label: 'Blush',
+    bg: Color(0xFFEFC7C2),
     text: Color(0xFF3E2B26),
     decoration: CardDecoration.sparkles,
   ),
   sage(
     id: 'sage',
+    label: 'Sage',
     bg: Color(0xFF7A8B6F),
     text: Color(0xFFF1E8D4),
     decoration: CardDecoration.stars,
   ),
+  mint(
+    id: 'mint',
+    label: 'Mint',
+    bg: Color(0xFFB8D4C6),
+    text: Color(0xFF3E2B26),
+    // Light cards paint their decoration in the dark text colour, so shapes
+    // read far stronger here than the same shapes do on the dark themes.
+    // `orbs` became heavy smudges and `stars` stayed busy; sparkles are the
+    // only treatment subtle enough, which is why both pastels share it.
+    decoration: CardDecoration.sparkles,
+  ),
   dusk(
     id: 'dusk',
+    label: 'Dusk',
     bg: Color(0xFF6F5D7A),
     text: Color(0xFFF1E8D4),
     decoration: CardDecoration.stars,
   ),
   ocean(
     id: 'ocean',
+    label: 'Ocean',
     bg: Color(0xFF6F8BA1),
     text: Color(0xFFF1E8D4),
     decoration: CardDecoration.sparkles,
   ),
   terracotta(
     id: 'terracotta',
+    label: 'Terracotta',
     bg: Color(0xFFB87361),
     text: Color(0xFFF1E8D4),
     decoration: CardDecoration.sparkles,
@@ -93,12 +119,17 @@ enum CardBackdropTheme {
 
   const CardBackdropTheme({
     required this.id,
+    required this.label,
     required this.bg,
     required this.text,
     required this.decoration,
   });
 
   final String id;
+
+  /// Display name for pickers and settings rows. Lives here so the two
+  /// call sites can't drift out of sync when the palette changes.
+  final String label;
   final Color bg;
   final Color text;
   final CardDecoration decoration;
