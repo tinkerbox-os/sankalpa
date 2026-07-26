@@ -11,6 +11,7 @@ import 'package:sankalpa/features/onboarding/onboarding_screen.dart';
 import 'package:sankalpa/features/ritual/ritual_screen.dart';
 import 'package:sankalpa/features/settings/settings_screen.dart';
 import 'package:sankalpa/features/today/today_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Root GoRouter for Sankalpa.
 ///
@@ -81,7 +82,12 @@ final routerProvider = Provider<GoRouter>((ref) {
               state.uri.fragment.contains('access_token=');
       if (hasAuthCode) return '/';
 
-      final signedIn = ref.read(isSignedInProvider);
+      // GoTrue updates currentSession synchronously before verifyOTP/signOut
+      // completes, while the Riverpod stream may still contain the preceding
+      // event for one frame. Redirect decisions must use the auth client's
+      // source of truth or an explicit post-login navigation can be bounced
+      // straight back to /sign-in by stale provider state.
+      final signedIn = Supabase.instance.client.auth.currentSession != null;
       final goingToSignIn = state.matchedLocation == '/sign-in';
 
       if (!signedIn && !goingToSignIn) return '/sign-in';

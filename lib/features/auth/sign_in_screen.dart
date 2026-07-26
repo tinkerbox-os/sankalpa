@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/widgets/friendly_error.dart';
@@ -135,10 +136,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     // A code is single-use server-side, so firing two verifications for one
     // user action burns the token: the first consumes it and the second comes
     // back `otp_expired`, which surfaces as "that code didn't match" on a code
-    // that was perfectly good. Three things can trigger this method — the
-    // auto-submit in `onChanged`, the keyboard's done action, and the Sign in
-    // button — and iOS one-time-code autofill can set the text and submit in
-    // the same gesture, so the guard has to be here rather than per-trigger.
+    // that was perfectly good. Both the keyboard's Done action and the Sign in
+    // button can trigger this method in the same frame, so the guard has to be
+    // here rather than per-trigger.
     if (_verifying) return;
     // Be lenient: strip whitespace/dashes the user may have copied
     // alongside the digits (some email clients add spacing).
@@ -158,8 +158,11 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             email: _emailCtrl.text,
             token: code,
           );
-      // The auth state stream will fire on success and the router will
-      // redirect away from /sign-in automatically.
+      // GoTrue saves the new session before verifyOTP completes. Navigate
+      // explicitly instead of waiting for Riverpod's auth stream to propagate:
+      // that stream can update a frame later, leaving a successfully signed-in
+      // user stranded on this screen until another interaction refreshes it.
+      if (mounted) context.go('/');
     } on Object catch (e, st) {
       if (!mounted) return;
       final error = AppError.from(e, st);

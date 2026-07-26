@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/features/auth/sign_in_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -138,4 +139,55 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+
+  testWidgets('successful verification leaves the sign-in screen',
+      (tester) async {
+    final auth = _RecordingAuthController();
+    final router = GoRouter(
+      initialLocation: '/sign-in',
+      routes: [
+        GoRoute(
+          path: '/sign-in',
+          builder: (_, _) => const SignInScreen(),
+        ),
+        GoRoute(
+          path: '/',
+          builder: (_, _) => const Scaffold(
+            body: Center(child: Text('Signed in screen')),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authControllerProvider.overrideWithValue(auth)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(
+      find.byType(TextFormField),
+      'someone@example.com',
+    );
+    await tester.tap(find.text('Email me a code'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).last, '123456');
+
+    final signInButton = find.text('Sign in');
+    await tester.ensureVisible(signInButton);
+    await tester.tap(signInButton);
+    await tester.pumpAndSettle();
+
+    expect(auth.verifyCalls, 1);
+    expect(
+      find.text('Signed in screen'),
+      findsOneWidget,
+      reason: 'a successful verify must navigate immediately rather than wait '
+          'for the auth stream to refresh the router',
+    );
+    expect(find.byType(SignInScreen), findsNothing);
+  });
 }
