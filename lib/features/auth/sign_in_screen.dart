@@ -317,8 +317,10 @@ class _CodeEntry extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'We sent a 6-digit code to $email. Enter it below — it expires '
-          'in an hour.',
+          // 24h matches the project's Email OTP expiration (86400s), which is
+          // the maximum the dashboard allows.
+          'We sent a 6-digit code to $email. Enter it below — it\u2019s good '
+          'for 24 hours.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.78),
