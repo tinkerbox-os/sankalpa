@@ -433,9 +433,8 @@ class _RitualCta extends ConsumerWidget {
     );
     final hasAny = count > 0;
 
-    final themeIdAsync = ref.watch(globalCardThemeIdProvider);
     final backdrop = CardBackdropTheme.fromId(
-      themeIdAsync.valueOrNull ?? 'chocolate',
+      ref.watch(immediateCardThemeIdProvider),
     );
     final isDark = backdrop.bg.computeLuminance() < 0.5;
     // Slightly stronger button background than the card itself: white

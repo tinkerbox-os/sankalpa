@@ -46,6 +46,12 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     super.initState();
     _startedAt = DateTime.now();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    // Apply the day's colour before the first frame. Waiting until build()
+    // left the PWA status bar on cream for a beat, then jumping to the card
+    // colour — the same class of flash as painting chocolate cards first.
+    final themeId = ref.read(immediateCardThemeIdProvider);
+    _chromeThemeId = themeId;
+    _setSystemChrome(CardBackdropTheme.fromId(themeId).bg);
     // Force a fresh fetch every time the ritual screen opens. Riverpod's
     // FutureProvider will otherwise hand back the cached AsyncData from
     // a previous mount, which means a reorder saved in Library wouldn't
@@ -178,8 +184,10 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     final manifestations = ref.watch(manifestationsProvider);
     final defaultSound = ref.watch(defaultSoundscapeProvider);
     final audio = ref.watch(ritualAudioProvider);
-    final globalThemeId =
-        ref.watch(globalCardThemeIdProvider).valueOrNull ?? 'chocolate';
+    // Prefer the synchronous cache-backed id so the first ritual frame is
+    // already the day's colour — not chocolate while the FutureProvider loads.
+    final globalThemeId = ref.watch(immediateCardThemeIdProvider);
+    final backdrop = CardBackdropTheme.fromId(globalThemeId);
     _syncSystemChrome(globalThemeId);
 
     // Kick off the default soundscape once it resolves. Idempotent — load()
@@ -193,10 +201,12 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     });
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      // Match the card so any loading/error/safe-area gap is the same colour
+      // the user already saw on the Today preview, not a black flash.
+      backgroundColor: backdrop.bg,
       body: manifestations.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: Colors.white),
+        loading: () => Center(
+          child: CircularProgressIndicator(color: backdrop.text),
         ),
         error: (e, st) => _ErrorView(error: AppError.from(e, st)),
         data: (items) {

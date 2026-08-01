@@ -1,13 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sankalpa/app/sankalpa_app.dart';
+import 'package:sankalpa/data/audio/ritual_audio_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('SankalpaApp boots and renders the Today screen',
       (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
     await tester.pumpWidget(
-      const ProviderScope(
-        child: SankalpaApp(),
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+        child: const SankalpaApp(),
       ),
     );
     // Not `pumpAndSettle`: the Today screen's `CardAmbientDecoration` drives a

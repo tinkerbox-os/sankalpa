@@ -256,7 +256,7 @@ class _AddEditManifestationScreenState
     final theme = Theme.of(context);
     final categories = ref.watch(categoriesProvider);
     final globalThemeId =
-        ref.watch(globalCardThemeIdProvider).valueOrNull ?? 'chocolate';
+        ref.watch(immediateCardThemeIdProvider);
 
     return Scaffold(
       appBar: AppBar(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
+import 'package:sankalpa/data/audio/ritual_audio_service.dart';
 import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:sankalpa/widgets/card_ambient_decoration.dart';
 
@@ -82,6 +83,17 @@ class CardThemePicker {
                               await sheetRef
                                   .read(userProfileRepositoryProvider)
                                   .updateSettings({'card_theme_id': t.id});
+                              // Write the local cache before invalidating so
+                              // immediateCardThemeIdProvider never briefly
+                              // falls back to the previous colour.
+                              final shuffle = prefs?.shuffleDaily ?? false;
+                              cacheCardStylePrefs(
+                                sheetRef.read(sharedPreferencesProvider),
+                                CardStylePrefs(
+                                  themeId: t.id,
+                                  shuffleDaily: shuffle,
+                                ),
+                              );
                               sheetRef
                                 ..invalidate(userProfileProvider)
                                 ..invalidate(cardStylePrefsProvider)

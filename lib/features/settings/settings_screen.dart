@@ -28,9 +28,10 @@ class SettingsScreen extends ConsumerWidget {
     // While shuffle is on, the row preview shows the THEME ACTUALLY IN
     // EFFECT TODAY rather than the user's stored anchor — that matches
     // what they're seeing on the home screen and ritual.
-    final effectiveThemeId =
-        ref.watch(globalCardThemeIdProvider).valueOrNull ?? 'chocolate';
-    final shuffle = prefs?.shuffleDaily ?? false;
+    final effectiveThemeId = ref.watch(immediateCardThemeIdProvider);
+    final shuffle = prefs?.shuffleDaily ??
+        cardStylePrefsFromCache(ref.watch(sharedPreferencesProvider))
+            .shuffleDaily;
     final cardTheme = CardBackdropTheme.fromId(effectiveThemeId);
 
     return Scaffold(
@@ -80,6 +81,13 @@ class SettingsScreen extends ConsumerWidget {
                     await ref
                         .read(userProfileRepositoryProvider)
                         .updateSettings({'card_theme_shuffle_daily': v});
+                    cacheCardStylePrefs(
+                      ref.read(sharedPreferencesProvider),
+                      CardStylePrefs(
+                        themeId: prefs.themeId,
+                        shuffleDaily: v,
+                      ),
+                    );
                     ref
                       ..invalidate(cardStylePrefsProvider)
                       ..invalidate(globalCardThemeIdProvider);

@@ -664,7 +664,7 @@ class _ManifestationTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final globalThemeId =
-        ref.watch(globalCardThemeIdProvider).valueOrNull ?? 'chocolate';
+        ref.watch(immediateCardThemeIdProvider);
     final backdrop = CardBackdropTheme.fromId(globalThemeId);
     final isReorder = dragHandleIndex != null;
     final hasImage = item.backdropType == BackdropType.image &&

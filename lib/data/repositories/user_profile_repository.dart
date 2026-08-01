@@ -1,8 +1,46 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
+import 'package:sankalpa/data/audio/ritual_audio_service.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/models/user_profile.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Local cache of card-style prefs. Lets the ritual paint the correct colour
+/// on the first frame instead of flashing the chocolate default while the
+/// Supabase profile round-trip completes (or while Riverpod re-creates the
+/// FutureProvider after the Today screen stops listening during navigation).
+const _cachedThemeIdKey = 'card_theme_id';
+const _cachedShuffleKey = 'card_theme_shuffle_daily';
+
+/// Pure resolver used by both the network-backed provider and the
+/// SharedPreferences-backed immediate provider. Kept free of I/O so the
+/// weekday rotation can be unit-tested without Flutter bindings.
+String resolveCardThemeId({
+  required String themeId,
+  required bool shuffleDaily,
+  DateTime? now,
+}) {
+  if (!shuffleDaily) return themeId;
+  final today = now ?? DateTime.now();
+  final dayOfYear = today.difference(DateTime(today.year)).inDays;
+  final ids = CardBackdropTheme.values.map((t) => t.id).toList();
+  return ids[dayOfYear % ids.length];
+}
+
+void cacheCardStylePrefs(SharedPreferences sp, CardStylePrefs prefs) {
+  unawaited(sp.setString(_cachedThemeIdKey, prefs.themeId));
+  unawaited(sp.setBool(_cachedShuffleKey, prefs.shuffleDaily));
+}
+
+CardStylePrefs cardStylePrefsFromCache(SharedPreferences sp) {
+  return CardStylePrefs(
+    themeId: sp.getString(_cachedThemeIdKey) ?? 'chocolate',
+    shuffleDaily: sp.getBool(_cachedShuffleKey) ?? false,
+  );
+}
 
 /// Reads & writes the per-user profile row (`user_profiles`).
 ///
@@ -111,13 +149,20 @@ class CardStylePrefs {
 
 /// Raw card-style preferences from the settings jsonb.
 final cardStylePrefsProvider = FutureProvider<CardStylePrefs>((ref) async {
-  ref.watch(currentUserProvider);
+  // Survive the brief gap between Today unmounting and Ritual mounting —
+  // without this, Riverpod disposes the FutureProvider the moment the last
+  // listener leaves, and Ritual remounts into a loading chocolate flash.
+  ref
+    ..keepAlive()
+    ..watch(currentUserProvider);
   final settings =
       await ref.read(userProfileRepositoryProvider).getRawSettings();
-  return CardStylePrefs(
+  final prefs = CardStylePrefs(
     themeId: (settings['card_theme_id'] as String?) ?? 'chocolate',
     shuffleDaily: settings['card_theme_shuffle_daily'] == true,
   );
+  cacheCardStylePrefs(ref.read(sharedPreferencesProvider), prefs);
+  return prefs;
 });
 
 /// Resolved global card theme id — what every card on every screen
@@ -128,14 +173,27 @@ final cardStylePrefsProvider = FutureProvider<CardStylePrefs>((ref) async {
 /// anymore. That column is kept in case Phase 2 brings back per-card
 /// variation (e.g. AI-themed cards), but the UI no longer offers it.
 final globalCardThemeIdProvider = FutureProvider<String>((ref) async {
+  ref.keepAlive();
   final prefs = await ref.watch(cardStylePrefsProvider.future);
-  if (!prefs.shuffleDaily) return prefs.themeId;
-  // Deterministic rotation: same day → same theme, so the look is
-  // stable across the entire day (no flip mid-ritual at midnight is
-  // fine; we want today to feel consistent end-to-end).
-  final today = DateTime.now();
-  final dayOfYear =
-      today.difference(DateTime(today.year)).inDays;
-  final ids = CardBackdropTheme.values.map((t) => t.id).toList();
-  return ids[dayOfYear % ids.length];
+  return resolveCardThemeId(
+    themeId: prefs.themeId,
+    shuffleDaily: prefs.shuffleDaily,
+  );
+});
+
+/// Theme id available on the first build frame.
+///
+/// Prefers the live [globalCardThemeIdProvider] value when it is already
+/// resolved; otherwise derives the same answer from the SharedPreferences
+/// cache written the last time the profile was fetched. That means a ritual
+/// entered from Today — or a cold start after the first profile load —
+/// never paints chocolate before the day's colour.
+final immediateCardThemeIdProvider = Provider<String>((ref) {
+  final live = ref.watch(globalCardThemeIdProvider).valueOrNull;
+  if (live != null) return live;
+  final cached = cardStylePrefsFromCache(ref.watch(sharedPreferencesProvider));
+  return resolveCardThemeId(
+    themeId: cached.themeId,
+    shuffleDaily: cached.shuffleDaily,
+  );
 });
