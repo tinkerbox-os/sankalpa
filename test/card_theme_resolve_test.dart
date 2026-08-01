@@ -47,17 +47,18 @@ void main() {
   });
 
   group('immediateCardThemeIdProvider', () {
-    test('uses the SharedPreferences cache before the network resolves',
-        () async {
+    test("uses today's resolved cache before the network resolves", () async {
       SharedPreferences.setMockInitialValues({});
       final sp = await SharedPreferences.getInstance();
-      cacheCardStylePrefs(
+      // Pinned prefs alone would still read as chocolate when shuffle has
+      // never been cached (defaults to false). The resolved-day cache is what
+      // prevents that flash.
+      await cacheCardStylePrefs(
         sp,
-        const CardStylePrefs(themeId: 'chocolate', shuffleDaily: true),
+        const CardStylePrefs(themeId: 'chocolate', shuffleDaily: false),
       );
+      await cacheResolvedCardThemeId(sp, 'sage');
 
-      // Do not override globalCardThemeIdProvider with data — leave it in a
-      // never-completing loading state so the cache path is the only source.
       final container = ProviderContainer(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(sp),
@@ -68,21 +69,42 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final expected = resolveCardThemeId(
-        themeId: 'chocolate',
-        shuffleDaily: true,
+      expect(
+        container.read(immediateCardThemeIdProvider),
+        'sage',
       );
-      expect(container.read(immediateCardThemeIdProvider), expected);
-      expect(expected, isNot('chocolate'));
+    });
+
+    test('ignores a resolved cache from another calendar day', () async {
+      SharedPreferences.setMockInitialValues({});
+      final sp = await SharedPreferences.getInstance();
+      await cacheResolvedCardThemeId(
+        sp,
+        'sage',
+        now: DateTime.now().subtract(const Duration(days: 1)),
+      );
+      await cacheCardStylePrefs(
+        sp,
+        const CardStylePrefs(themeId: 'ocean', shuffleDaily: false),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(sp),
+          globalCardThemeIdProvider.overrideWith(
+            (ref) => Completer<String>().future,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(container.read(immediateCardThemeIdProvider), 'ocean');
     });
 
     test('prefers the live FutureProvider value over a stale cache', () async {
       SharedPreferences.setMockInitialValues({});
       final sp = await SharedPreferences.getInstance();
-      cacheCardStylePrefs(
-        sp,
-        const CardStylePrefs(themeId: 'mint', shuffleDaily: false),
-      );
+      await cacheResolvedCardThemeId(sp, 'mint');
 
       final container = ProviderContainer(
         overrides: [
@@ -92,7 +114,6 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      // Wait for the override future to land.
       await container.read(globalCardThemeIdProvider.future);
       expect(container.read(immediateCardThemeIdProvider), 'dusk');
     });

@@ -120,7 +120,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/ritual',
         name: 'ritual',
-        builder: (context, state) => const RitualScreen(),
+        builder: (context, state) {
+          // Today passes the colour already on screen so Ritual never has to
+          // re-resolve through a loading FutureProvider and flash chocolate.
+          final extra = state.extra;
+          return RitualScreen(
+            initialThemeId: extra is String ? extra : null,
+          );
+        },
       ),
       GoRoute(
         path: '/settings',

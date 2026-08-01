@@ -27,7 +27,11 @@ import 'package:sankalpa/widgets/card_ambient_decoration.dart';
 /// - Light haptic tick on each card change.
 /// - Only chrome on screen: an exit "X" and the mute toggle.
 class RitualScreen extends ConsumerStatefulWidget {
-  const RitualScreen({super.key});
+  const RitualScreen({super.key, this.initialThemeId});
+
+  /// Colour already shown on the Today CTA. When set, the ritual locks to it
+  /// for the whole session so a provider reload cannot flash chocolate.
+  final String? initialThemeId;
 
   @override
   ConsumerState<RitualScreen> createState() => _RitualScreenState();
@@ -36,6 +40,7 @@ class RitualScreen extends ConsumerStatefulWidget {
 class _RitualScreenState extends ConsumerState<RitualScreen> {
   final _pageCtrl = PageController();
   late final DateTime _startedAt;
+  late final String _lockedThemeId;
   int _currentIndex = 0;
   int _maxIndexReached = 0;
   bool _completed = false;
@@ -46,23 +51,24 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     super.initState();
     _startedAt = DateTime.now();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
-    // Apply the day's colour before the first frame. Waiting until build()
-    // left the PWA status bar on cream for a beat, then jumping to the card
-    // colour — the same class of flash as painting chocolate cards first.
-    final themeId = ref.read(immediateCardThemeIdProvider);
-    _chromeThemeId = themeId;
-    _setSystemChrome(CardBackdropTheme.fromId(themeId).bg);
-    // Force a fresh fetch every time the ritual screen opens. Riverpod's
-    // FutureProvider will otherwise hand back the cached AsyncData from
-    // a previous mount, which means a reorder saved in Library wouldn't
-    // show up here until the app is fully restarted. The invalidate
-    // schedules a rebuild + refetch on the next frame, so the user sees
-    // the freshest order possible without an explicit pull-to-refresh
-    // gesture (there isn't one here — the screen is full-bleed).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      unawaited(ref.refresh(manifestationsProvider.future));
-    });
+    // Lock the colour before the first frame. Prefer the id Today handed us
+    // via the route — that is already what the user was looking at — and only
+    // fall back to the cache-backed provider when Ritual is opened directly.
+    _lockedThemeId =
+        widget.initialThemeId ?? ref.read(immediateCardThemeIdProvider);
+    _chromeThemeId = _lockedThemeId;
+    _setSystemChrome(CardBackdropTheme.fromId(_lockedThemeId).bg);
+    // Persist so the next cold start opens on today's colour even before the
+    // profile round-trip completes.
+    unawaited(
+      cacheResolvedCardThemeId(
+        ref.read(sharedPreferencesProvider),
+        _lockedThemeId,
+      ),
+    );
+    // Today already refreshed the manifestation list inside the Start tap
+    // handler. Re-refreshing here put the provider into AsyncLoading and
+    // blanked the cards for a beat; skip that and keep the warm cache.
   }
 
   @override
@@ -184,11 +190,10 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     final manifestations = ref.watch(manifestationsProvider);
     final defaultSound = ref.watch(defaultSoundscapeProvider);
     final audio = ref.watch(ritualAudioProvider);
-    // Prefer the synchronous cache-backed id so the first ritual frame is
-    // already the day's colour — not chocolate while the FutureProvider loads.
-    final globalThemeId = ref.watch(immediateCardThemeIdProvider);
-    final backdrop = CardBackdropTheme.fromId(globalThemeId);
-    _syncSystemChrome(globalThemeId);
+    // Session-locked in initState — do not re-watch the theme provider here
+    // or a late profile emission can still repaint chocolate mid-entry.
+    final backdrop = CardBackdropTheme.fromId(_lockedThemeId);
+    _syncSystemChrome(_lockedThemeId);
 
     // Kick off the default soundscape once it resolves. Idempotent — load()
     // no-ops if the URL is unchanged.
@@ -205,6 +210,10 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
       // the user already saw on the Today preview, not a black flash.
       backgroundColor: backdrop.bg,
       body: manifestations.when(
+        // Keep the previous card list on screen if something re-fetches;
+        // a loading spinner on chocolate was part of the entry flash.
+        skipLoadingOnReload: true,
+        skipLoadingOnRefresh: true,
         loading: () => Center(
           child: CircularProgressIndicator(color: backdrop.text),
         ),
@@ -220,7 +229,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
                 onPageChanged: _onPageChanged,
                 itemBuilder: (context, i) => _ManifestationCard(
                   manifestation: items[i],
-                  themeId: globalThemeId,
+                  themeId: _lockedThemeId,
                   onTap: () => _advance(items.length),
                 ),
               ),

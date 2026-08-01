@@ -87,9 +87,18 @@ class CardThemePicker {
                               // immediateCardThemeIdProvider never briefly
                               // falls back to the previous colour.
                               final shuffle = prefs?.shuffleDaily ?? false;
-                              cacheCardStylePrefs(
-                                sheetRef.read(sharedPreferencesProvider),
+                              final sp =
+                                  sheetRef.read(sharedPreferencesProvider);
+                              await cacheCardStylePrefs(
+                                sp,
                                 CardStylePrefs(
+                                  themeId: t.id,
+                                  shuffleDaily: shuffle,
+                                ),
+                              );
+                              await cacheResolvedCardThemeId(
+                                sp,
+                                resolveCardThemeId(
                                   themeId: t.id,
                                   shuffleDaily: shuffle,
                                 ),

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/audio/ritual_audio_service.dart';
@@ -14,6 +12,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// FutureProvider after the Today screen stops listening during navigation).
 const _cachedThemeIdKey = 'card_theme_id';
 const _cachedShuffleKey = 'card_theme_shuffle_daily';
+const _resolvedThemeIdKey = 'card_theme_resolved_id';
+const _resolvedThemeDayKey = 'card_theme_resolved_day';
 
 /// Pure resolver used by both the network-backed provider and the
 /// SharedPreferences-backed immediate provider. Kept free of I/O so the
@@ -30,9 +30,28 @@ String resolveCardThemeId({
   return ids[dayOfYear % ids.length];
 }
 
-void cacheCardStylePrefs(SharedPreferences sp, CardStylePrefs prefs) {
-  unawaited(sp.setString(_cachedThemeIdKey, prefs.themeId));
-  unawaited(sp.setBool(_cachedShuffleKey, prefs.shuffleDaily));
+String _calendarDayKey(DateTime day) =>
+    '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+
+Future<void> cacheCardStylePrefs(
+  SharedPreferences sp,
+  CardStylePrefs prefs,
+) async {
+  await sp.setString(_cachedThemeIdKey, prefs.themeId);
+  await sp.setBool(_cachedShuffleKey, prefs.shuffleDaily);
+}
+
+/// Persists the colour the UI should open with today. Stored separately from
+/// the pinned prefs so a cold start with shuffle-on does not briefly resolve
+/// to chocolate (the pinned default) before the profile round-trip lands.
+Future<void> cacheResolvedCardThemeId(
+  SharedPreferences sp,
+  String themeId, {
+  DateTime? now,
+}) async {
+  final day = now ?? DateTime.now();
+  await sp.setString(_resolvedThemeIdKey, themeId);
+  await sp.setString(_resolvedThemeDayKey, _calendarDayKey(day));
 }
 
 CardStylePrefs cardStylePrefsFromCache(SharedPreferences sp) {
@@ -40,6 +59,19 @@ CardStylePrefs cardStylePrefsFromCache(SharedPreferences sp) {
     themeId: sp.getString(_cachedThemeIdKey) ?? 'chocolate',
     shuffleDaily: sp.getBool(_cachedShuffleKey) ?? false,
   );
+}
+
+/// Today's previously resolved colour, or null when the cache is from
+/// another calendar day / has never been written.
+String? resolvedCardThemeIdFromCache(
+  SharedPreferences sp, {
+  DateTime? now,
+}) {
+  final day = now ?? DateTime.now();
+  if (sp.getString(_resolvedThemeDayKey) != _calendarDayKey(day)) {
+    return null;
+  }
+  return sp.getString(_resolvedThemeIdKey);
 }
 
 /// Reads & writes the per-user profile row (`user_profiles`).
@@ -161,7 +193,15 @@ final cardStylePrefsProvider = FutureProvider<CardStylePrefs>((ref) async {
     themeId: (settings['card_theme_id'] as String?) ?? 'chocolate',
     shuffleDaily: settings['card_theme_shuffle_daily'] == true,
   );
-  cacheCardStylePrefs(ref.read(sharedPreferencesProvider), prefs);
+  final sp = ref.read(sharedPreferencesProvider);
+  await cacheCardStylePrefs(sp, prefs);
+  await cacheResolvedCardThemeId(
+    sp,
+    resolveCardThemeId(
+      themeId: prefs.themeId,
+      shuffleDaily: prefs.shuffleDaily,
+    ),
+  );
   return prefs;
 });
 
@@ -175,23 +215,31 @@ final cardStylePrefsProvider = FutureProvider<CardStylePrefs>((ref) async {
 final globalCardThemeIdProvider = FutureProvider<String>((ref) async {
   ref.keepAlive();
   final prefs = await ref.watch(cardStylePrefsProvider.future);
-  return resolveCardThemeId(
+  final id = resolveCardThemeId(
     themeId: prefs.themeId,
     shuffleDaily: prefs.shuffleDaily,
   );
+  await cacheResolvedCardThemeId(
+    ref.read(sharedPreferencesProvider),
+    id,
+  );
+  return id;
 });
 
 /// Theme id available on the first build frame.
 ///
-/// Prefers the live [globalCardThemeIdProvider] value when it is already
-/// resolved; otherwise derives the same answer from the SharedPreferences
-/// cache written the last time the profile was fetched. That means a ritual
-/// entered from Today — or a cold start after the first profile load —
-/// never paints chocolate before the day's colour.
+/// Order of preference:
+/// 1. Live [globalCardThemeIdProvider] when already resolved
+/// 2. Today's previously resolved colour from SharedPreferences
+/// 3. Recompute from cached pinned prefs (may still be chocolate on a
+///    brand-new install before the first profile fetch)
 final immediateCardThemeIdProvider = Provider<String>((ref) {
   final live = ref.watch(globalCardThemeIdProvider).valueOrNull;
   if (live != null) return live;
-  final cached = cardStylePrefsFromCache(ref.watch(sharedPreferencesProvider));
+  final sp = ref.watch(sharedPreferencesProvider);
+  final resolved = resolvedCardThemeIdFromCache(sp);
+  if (resolved != null) return resolved;
+  final cached = cardStylePrefsFromCache(sp);
   return resolveCardThemeId(
     themeId: cached.themeId,
     shuffleDaily: cached.shuffleDaily,

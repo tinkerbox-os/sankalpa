@@ -98,7 +98,11 @@ class TodayScreen extends ConsumerWidget {
                     await refreshed;
                   }
                   if (!context.mounted) return;
-                  context.go('/ritual');
+                  // Hand Ritual the colour the CTA is already painting. That
+                  // locks the first ritual frame to today's shade instead of
+                  // letting it fall back to chocolate while providers reload.
+                  final themeId = ref.read(immediateCardThemeIdProvider);
+                  context.go('/ritual', extra: themeId);
                 },
               ),
               if (SupabaseConfig.isConfigured) ...[

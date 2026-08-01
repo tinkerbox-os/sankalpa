@@ -81,9 +81,17 @@ class SettingsScreen extends ConsumerWidget {
                     await ref
                         .read(userProfileRepositoryProvider)
                         .updateSettings({'card_theme_shuffle_daily': v});
-                    cacheCardStylePrefs(
-                      ref.read(sharedPreferencesProvider),
+                    final sp = ref.read(sharedPreferencesProvider);
+                    await cacheCardStylePrefs(
+                      sp,
                       CardStylePrefs(
+                        themeId: prefs.themeId,
+                        shuffleDaily: v,
+                      ),
+                    );
+                    await cacheResolvedCardThemeId(
+                      sp,
+                      resolveCardThemeId(
                         themeId: prefs.themeId,
                         shuffleDaily: v,
                       ),
