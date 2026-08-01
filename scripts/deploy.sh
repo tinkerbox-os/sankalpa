@@ -38,6 +38,15 @@ flutter build web \
   --dart-define-from-file=supabase.env.json \
   --dart-define=BUILD_STAMP="$BUILD_STAMP"
 
+# Stamp the service worker cache name so activate drops the previous shell
+# cache. Without this, stale-while-revalidate kept serving yesterday's
+# main.dart.js for a full session after each deploy.
+if [ -f build/web/sw.js ]; then
+  sed -i.bak "s/const APP_CACHE_BUST = 'dev';/const APP_CACHE_BUST = '${BUILD_STAMP}';/" build/web/sw.js
+  rm -f build/web/sw.js.bak
+  echo "    APP_CACHE_BUST=$BUILD_STAMP"
+fi
+
 echo ">>> Publishing to gh-pages branch"
 cd build/web
 rm -rf .git
