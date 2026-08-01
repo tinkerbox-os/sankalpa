@@ -26,6 +26,9 @@ if [ ! -f supabase.env.json ]; then
   exit 1
 fi
 
+echo ">>> Smoke checks (analyze + test)"
+"$REPO_ROOT/scripts/smoke_check.sh"
+
 echo ">>> Building Flutter web with --base-href=/sankalpa/"
 touch web/.nojekyll
 BUILD_STAMP="$(date -u +%Y%m%d-%H%M)"

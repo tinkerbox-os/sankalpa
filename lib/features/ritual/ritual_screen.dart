@@ -41,6 +41,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
   final _pageCtrl = PageController();
   late final DateTime _startedAt;
   late final String _lockedThemeId;
+  late final RitualAudioService _audio;
   int _currentIndex = 0;
   int _maxIndexReached = 0;
   bool _completed = false;
@@ -50,6 +51,8 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
   void initState() {
     super.initState();
     _startedAt = DateTime.now();
+    // Cache before dispose — Riverpod forbids ref after the element unmounts.
+    _audio = ref.read(ritualAudioProvider);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
     // Lock the colour before the first frame. Prefer the id Today handed us
     // via the route — that is already what the user was looking at — and only
@@ -74,10 +77,10 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
   @override
   void dispose() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    _setSystemChrome(CreamPalette.bg);
+    _setSystemChrome(CreamPalette.bg, edgeTints: false);
     _pageCtrl.dispose();
     // Stop music when leaving (don't dispose the service - it's a singleton).
-    ref.read(ritualAudioProvider).stop();
+    unawaited(_audio.stop());
     super.dispose();
   }
 
@@ -95,8 +98,11 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     });
   }
 
-  void _setSystemChrome(Color color) {
-    setBrowserThemeColor(_cssColor(color));
+  void _setSystemChrome(Color color, {bool edgeTints = true}) {
+    // Edge tints are ritual-only: they tell Safari 26 what colour to paint
+    // its toolbars, but must not outlive the ritual or they sit under/over
+    // Flutter's text-input overlay and the sign-in keyboard never opens.
+    setBrowserThemeColor(_cssColor(color), edgeTints: edgeTints);
     final iconBrightness =
         color.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light;
     SystemChrome.setSystemUIOverlayStyle(
@@ -173,7 +179,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 480),
         reverseTransitionDuration: const Duration(milliseconds: 240),
-        pageBuilder: (ctx, anim, _) => _RitualCompleteScreen(
+        pageBuilder: (ctx, anim, _) => RitualCompleteScreen(
           cardsRead: _maxIndexReached + 1,
           duration: duration,
           themeId: _lockedThemeId,
@@ -761,14 +767,17 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
-/// Full-screen completion view shown after the last card. Same dark, calm
-/// register as the ritual itself — no jarring jump back to a bright sheet.
-class _RitualCompleteScreen extends StatelessWidget {
-  const _RitualCompleteScreen({
+/// Full-screen completion view shown after the last card. Same calm register
+/// as the ritual itself — no jarring jump back to a bright sheet.
+///
+/// Public so widget tests can guard against hard-coding chocolate here.
+class RitualCompleteScreen extends StatelessWidget {
+  const RitualCompleteScreen({
     required this.cardsRead,
     required this.duration,
     required this.themeId,
     required this.onDone,
+    super.key,
   });
 
   final int cardsRead;

@@ -1,3 +1,4 @@
+import 'package:sankalpa/app/platform/browser_theme_color_record.dart';
 import 'package:web/web.dart' as web;
 
 /// Keeps browser/PWA chrome in step with Flutter's ritual card.
@@ -5,9 +6,15 @@ import 'package:web/web.dart' as web;
 /// iOS Safari 26+ ignores `<meta name="theme-color">` and instead samples the
 /// CSS `background-color` of fixed/sticky elements at the viewport edges
 /// (falling back to `body`). Flutter paints to a canvas, which Safari does
-/// not sample — so we maintain thin fixed DOM strips plus the page
-/// background that WebKit can see.
-void setBrowserThemeColor(String cssColor) {
+/// not sample — so during ritual we maintain thin fixed DOM strips plus the
+/// page background that WebKit can see.
+///
+/// [edgeTints] must only be true in ritual mode. The strips used to sit above
+/// Flutter's glass pane at max z-index and blocked the platform text-input
+/// overlay, so the email field on sign-in could focus without opening the
+/// keyboard.
+void setBrowserThemeColor(String cssColor, {bool edgeTints = false}) {
+  BrowserThemeColorRecord.record(cssColor, edgeTints: edgeTints);
   _upsertThemeColorMeta(cssColor);
 
   final root = web.document.documentElement;
@@ -16,16 +23,21 @@ void setBrowserThemeColor(String cssColor) {
   }
   web.document.body?.style.backgroundColor = cssColor;
 
-  _upsertEdgeTint(
-    id: 'sankalpa-chrome-tint-top',
-    cssColor: cssColor,
-    top: true,
-  );
-  _upsertEdgeTint(
-    id: 'sankalpa-chrome-tint-bottom',
-    cssColor: cssColor,
-    top: false,
-  );
+  if (edgeTints) {
+    _upsertEdgeTint(
+      id: BrowserChromeTintIds.top,
+      cssColor: cssColor,
+      top: true,
+    );
+    _upsertEdgeTint(
+      id: BrowserChromeTintIds.bottom,
+      cssColor: cssColor,
+      top: false,
+    );
+  } else {
+    _removeEdgeTint(BrowserChromeTintIds.top);
+    _removeEdgeTint(BrowserChromeTintIds.bottom);
+  }
 }
 
 void _upsertThemeColorMeta(String cssColor) {
@@ -46,6 +58,10 @@ void _upsertThemeColorMeta(String cssColor) {
   head.append(meta);
 }
 
+void _removeEdgeTint(String id) {
+  web.document.getElementById(id)?.remove();
+}
+
 void _upsertEdgeTint({
   required String id,
   required String cssColor,
@@ -60,11 +76,18 @@ void _upsertEdgeTint({
       ..id = id
       // Announce as presentational so assistive tech ignores the sampler.
       ..setAttribute('aria-hidden', 'true');
-    body.append(el);
+    // Insert behind Flutter's glass pane so the platform <input> used for
+    // text editing is never covered. Safari samples the CSS background of
+    // the fixed node regardless of paint order.
+    final first = body.firstChild;
+    if (first != null) {
+      body.insertBefore(el, first);
+    } else {
+      body.append(el);
+    }
   }
 
   // ≥12px and full width so Safari 26's edge sampler qualifies the node.
-  // pointer-events:none keeps taps reaching Flutter underneath.
   final inset = top
       ? 'env(safe-area-inset-top, 0px)'
       : 'env(safe-area-inset-bottom, 0px)';
@@ -78,7 +101,8 @@ void _upsertEdgeTint({
     'height:max(12px, $inset)',
     'background-color:$cssColor',
     'pointer-events:none',
-    'z-index:2147483647',
+    // Stay under Flutter's canvas and its text-input overlay.
+    'z-index:0',
     'margin:0',
     'padding:0',
     'border:0',

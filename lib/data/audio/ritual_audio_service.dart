@@ -25,6 +25,7 @@ class RitualAudioService extends ChangeNotifier {
   final AudioPlayer _player;
   bool _muted;
   String? _currentUrl;
+  bool _disposed = false;
 
   bool get isMuted => _muted;
 
@@ -124,13 +125,19 @@ class RitualAudioService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    await _player.stop();
+    try {
+      await _player.stop();
+    } on Object {
+      // Best-effort; ritual exit must not throw.
+    }
+    if (_disposed) return;
     _currentUrl = null;
     notifyListeners();
   }
 
   @override
   Future<void> dispose() async {
+    _disposed = true;
     super.dispose();
     await _player.dispose();
   }

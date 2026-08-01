@@ -67,6 +67,37 @@ Future<void> _pumpSignIn(
 
 void main() {
   testWidgets(
+    'email field is enabled and accepts focus and input',
+    (tester) async {
+      // Guards the Safari chrome-tint overlay regression: if a max-z-index
+      // DOM strip covers Flutter's text-input overlay, the field can appear
+      // focused while the platform never receives keystrokes.
+      final auth = _RecordingAuthController();
+      await _pumpSignIn(tester, auth);
+
+      final emailField = find.byType(TextFormField);
+      expect(emailField, findsOneWidget);
+
+      final formField = tester.widget<TextFormField>(emailField);
+      expect(formField.enabled, isTrue);
+
+      await tester.tap(emailField);
+      await tester.pump();
+      await tester.enterText(emailField, 'reader@example.com');
+      await tester.pump();
+
+      expect(find.text('reader@example.com'), findsOneWidget);
+      expect(
+        tester.testTextInput.hasAnyClients,
+        isTrue,
+        reason: 'the platform text input client must attach for the keyboard',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
     'a single gesture requests one code, not two',
     (tester) async {
       // Requesting a code invalidates the previous one, so a duplicate send
