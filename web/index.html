@@ -18,13 +18,18 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- viewport-fit=cover is required for iOS Safari to tint the bottom bar
+       from page/edge colours and for safe-area env() vars to resolve. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="Sankalpa — a daily ritual for your manifestations.">
   <meta name="theme-color" content="#EADFD0">
 
   <!-- iOS / installable web app -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- black-translucent lets the ritual colour draw under the status bar in
+       standalone (Add to Home Screen) mode instead of a solid system fill. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Sankalpa">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-precomposed.png">
