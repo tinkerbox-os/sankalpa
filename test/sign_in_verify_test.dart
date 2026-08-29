@@ -98,6 +98,78 @@ void main() {
   );
 
   testWidgets(
+    'tapping the left edge of the email field focuses it',
+    (tester) async {
+      final auth = _RecordingAuthController();
+      await _pumpSignIn(tester, auth);
+
+      final emailField = find.byType(TextFormField);
+      expect(emailField, findsOneWidget);
+
+      final box = tester.getRect(emailField);
+      await tester.tapAt(Offset(box.left + 4, box.center.dy));
+      await tester.pump();
+
+      expect(
+        tester.testTextInput.hasAnyClients,
+        isTrue,
+        reason: 'tapping the left edge of the email field must focus it',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'tapping the right edge of the email field focuses it',
+    (tester) async {
+      final auth = _RecordingAuthController();
+      await _pumpSignIn(tester, auth);
+
+      final emailField = find.byType(TextFormField);
+      expect(emailField, findsOneWidget);
+
+      final box = tester.getRect(emailField);
+      await tester.tapAt(Offset(box.right - 4, box.center.dy));
+      await tester.pump();
+
+      expect(
+        tester.testTextInput.hasAnyClients,
+        isTrue,
+        reason: 'tapping the right edge of the email field must focus it',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  // NOTE: The native HTML <input> overlay (NativeWebTextField) that fixes
+  // the standalone PWA keyboard issue is a no-op in the test harness
+  // (dart:ui_web / HtmlElementView are not available outside a browser).
+  // The test below verifies that the NativeWebTextField stub passes through
+  // to the Flutter TextFormField, preserving all existing behavior.
+  // Manual verification in an installed PWA (Add to Home Screen) is required
+  // to confirm the keyboard opens in standalone mode.
+  testWidgets(
+    'NativeWebTextField stub passes through to the Flutter field',
+    (tester) async {
+      final auth = _RecordingAuthController();
+      await _pumpSignIn(tester, auth);
+
+      // The TextFormField should still be in the tree (rendered by the stub).
+      final emailField = find.byType(TextFormField);
+      expect(emailField, findsOneWidget);
+
+      // enterText bypasses hit-testing and directly sets the controller.
+      await tester.enterText(emailField, 'pwa@example.com');
+      await tester.pump();
+      expect(find.text('pwa@example.com'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
     'a single gesture requests one code, not two',
     (tester) async {
       // Requesting a code invalidates the previous one, so a duplicate send

@@ -14,6 +14,7 @@ import 'package:sankalpa/data/web/install_prompt.dart';
 import 'package:sankalpa/widgets/card_ambient_decoration.dart';
 import 'package:sankalpa/widgets/logo.dart';
 import 'package:sankalpa/widgets/soundscape_picker.dart';
+import 'package:sankalpa/widgets/web_tap_overlay.dart';
 
 /// Home / "Today" screen.
 ///
@@ -455,11 +456,12 @@ class _RitualCta extends ConsumerWidget {
       borderRadius: BorderRadius.circular(Radii.lg),
       child: Stack(
         children: [
-          // Backdrop layer: theme bg + ambient sparkles + vignette,
-          // matching the ritual card so the home screen reads as a
-          // small "preview" of the ritual.
+          // All backdrop layers are IgnorePointer so they never absorb
+          // taps that should reach the CTA button.  ColoredBox defaults
+          // to HitTestBehavior.opaque, and on Flutter web that fallback
+          // hit target was intercepting taps near the button edges.
           Positioned.fill(
-            child: ColoredBox(color: backdrop.bg),
+            child: IgnorePointer(child: ColoredBox(color: backdrop.bg)),
           ),
           Positioned.fill(
             child: CardAmbientDecoration(
@@ -471,55 +473,67 @@ class _RitualCta extends ConsumerWidget {
           Positioned.fill(
             child: CardVignette(dark: isDark),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    const Logo(variant: LogoVariant.symbol, height: 22),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Daily ritual',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: backdrop.text,
+          // GestureDetector with opaque behavior ensures taps anywhere
+          // inside the card bounds are routed to this subtree rather
+          // than falling through to the (now-ignored) backdrop layers.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: enabled && hasAny ? onStart : null,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Logo(variant: LogoVariant.symbol, height: 22),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Daily ritual',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: backdrop.text,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  hasAny
-                      ? '$count manifestation${count == 1 ? '' : 's'} ready.'
-                      : 'Add a manifestation to begin.',
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: backdrop.text.withValues(alpha: 0.78),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 24),
-                FilledButton(
-                  style: ButtonStyle(
-                    padding: const WidgetStatePropertyAll(
-                      EdgeInsets.symmetric(vertical: 16),
+                  const SizedBox(height: 12),
+                  Text(
+                    hasAny
+                        ? '$count manifestation${count == 1 ? '' : 's'} ready.'
+                        : 'Add a manifestation to begin.',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: backdrop.text.withValues(alpha: 0.78),
                     ),
-                    backgroundColor:
-                        WidgetStateProperty.resolveWith((states) {
-                      if (states.contains(WidgetState.disabled)) {
-                        return buttonBg.withValues(alpha: 0.4);
-                      }
-                      if (states.contains(WidgetState.pressed)) {
-                        return buttonBgPressed;
-                      }
-                      return buttonBg;
-                    }),
-                    foregroundColor: WidgetStatePropertyAll(backdrop.text),
-                    overlayColor: WidgetStatePropertyAll(buttonBgPressed),
                   ),
-                  onPressed: enabled && hasAny ? onStart : null,
-                  child: const Text('Start ritual'),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  WebTapOverlay(
+                    onTap: enabled && hasAny ? onStart : null,
+                    child: FilledButton(
+                      style: ButtonStyle(
+                        padding: const WidgetStatePropertyAll(
+                          EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        backgroundColor:
+                            WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.disabled)) {
+                            return buttonBg.withValues(alpha: 0.4);
+                          }
+                          if (states.contains(WidgetState.pressed)) {
+                            return buttonBgPressed;
+                          }
+                          return buttonBg;
+                        }),
+                        foregroundColor:
+                            WidgetStatePropertyAll(backdrop.text),
+                        overlayColor:
+                            WidgetStatePropertyAll(buttonBgPressed),
+                      ),
+                      onPressed: enabled && hasAny ? onStart : null,
+                      child: const Text('Start ritual'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

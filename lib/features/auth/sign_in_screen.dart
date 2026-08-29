@@ -9,6 +9,8 @@ import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/widgets/friendly_error.dart';
 import 'package:sankalpa/widgets/logo.dart';
+import 'package:sankalpa/widgets/native_web_text_field.dart';
+import 'package:sankalpa/widgets/web_tap_overlay.dart';
 
 /// Email sign-in via a 6-digit code.
 ///
@@ -33,6 +35,7 @@ class SignInScreen extends ConsumerStatefulWidget {
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _emailCtrl = TextEditingController();
+  final _emailFocus = FocusNode();
   final _codeCtrl = TextEditingController();
   final _codeFocus = FocusNode();
   final _formKey = GlobalKey<FormState>();
@@ -65,6 +68,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _cooldownTicker?.cancel();
     _cooldownSeconds.dispose();
     _emailCtrl.dispose();
+    _emailFocus.dispose();
     _codeCtrl.dispose();
     _codeFocus.dispose();
     super.dispose();
@@ -240,43 +244,55 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onUseDifferentEmail: _useDifferentEmail,
                       )
                     else ...[
-                      TextFormField(
+                      NativeWebTextField(
                         controller: _emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [AutofillHints.email],
-                        autocorrect: false,
-                        textInputAction: TextInputAction.send,
-                        onFieldSubmitted: (_) => _send(),
-                        enabled: !_sending,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          hintText: 'you@example.com',
+                        inputType: 'email',
+                        inputMode: 'email',
+                        placeholder: 'you@example.com',
+                        autocomplete: 'email',
+                        onSubmitted: (_) => _send(),
+                        child: TextFormField(
+                          controller: _emailCtrl,
+                          focusNode: _emailFocus,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          autocorrect: false,
+                          textInputAction: TextInputAction.send,
+                          onFieldSubmitted: (_) => _send(),
+                          enabled: !_sending,
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            hintText: 'you@example.com',
+                          ),
+                          validator: (v) {
+                            final s = (v ?? '').trim();
+                            if (s.isEmpty) return 'Enter your email';
+                            if (!s.contains('@') || !s.contains('.')) {
+                              return 'That doesn\u2019t look like an email';
+                            }
+                            return null;
+                          },
                         ),
-                        validator: (v) {
-                          final s = (v ?? '').trim();
-                          if (s.isEmpty) return 'Enter your email';
-                          if (!s.contains('@') || !s.contains('.')) {
-                            return 'That doesn\u2019t look like an email';
-                          }
-                          return null;
-                        },
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 12),
                         InlineError(error: _error!),
                       ],
                       const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _sending ? null : _send,
-                        child: _sending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Email me a code'),
+                      WebTapOverlay(
+                        onTap: _sending ? null : _send,
+                        child: FilledButton(
+                          onPressed: _sending ? null : _send,
+                          child: _sending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Email me a code'),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -351,39 +367,34 @@ class _CodeEntry extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        TextField(
+        NativeWebTextField(
           controller: codeCtrl,
-          focusNode: codeFocus,
-          enabled: !verifying,
-          // Numeric keypad on mobile; long-press still surfaces the
-          // system clipboard menu so pasting a code from email works.
-          keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.done,
-          autofillHints: const [AutofillHints.oneTimeCode],
-          onSubmitted: (_) => onVerify(),
-          // Do not auto-submit at six digits. In particular, iOS one-time-code
-          // autofill can invoke onChanged while its platform editing state is
-          // still settling. That creates a hidden verification attempt before
-          // the user taps Sign in, making a subsequent failure look like the
-          // first attempt. Verification is deliberately explicit: the button
-          // below or the keyboard's Done action.
-          textAlign: TextAlign.center,
+          inputMode: 'numeric',
           maxLength: 6,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            letterSpacing: 6,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-          inputFormatters: [
-            // Strip anything non-digit on the fly so a paste of
-            // "  123 456 " collapses cleanly to "123456".
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(6),
-          ],
-          decoration: const InputDecoration(
-            counterText: '',
-            // No hintText — the prior "000000" placeholder looked like
-            // a real entered value because of the wide letter-spacing.
-            // The label below the field tells the user what to do.
+          autocomplete: 'one-time-code',
+          textAlign: 'center',
+          onSubmitted: (_) => onVerify(),
+          child: TextField(
+            controller: codeCtrl,
+            focusNode: codeFocus,
+            enabled: !verifying,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.oneTimeCode],
+            onSubmitted: (_) => onVerify(),
+            textAlign: TextAlign.center,
+            maxLength: 6,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              letterSpacing: 6,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            decoration: const InputDecoration(
+              counterText: '',
+            ),
           ),
         ),
         const SizedBox(height: 6),
@@ -399,15 +410,18 @@ class _CodeEntry extends StatelessWidget {
           InlineError(error: error!, textAlign: TextAlign.center),
         ],
         const SizedBox(height: 16),
-        FilledButton(
-          onPressed: verifying ? null : onVerify,
-          child: verifying
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Sign in'),
+        WebTapOverlay(
+          onTap: verifying ? null : onVerify,
+          child: FilledButton(
+            onPressed: verifying ? null : onVerify,
+            child: verifying
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Sign in'),
+          ),
         ),
         const SizedBox(height: 16),
         Wrap(

@@ -16,6 +16,7 @@ import 'package:sankalpa/data/repositories/session_repository.dart';
 import 'package:sankalpa/data/repositories/soundscape_repository.dart';
 import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:sankalpa/widgets/card_ambient_decoration.dart';
+import 'package:sankalpa/widgets/web_tap_overlay.dart';
 
 /// Full-screen daily ritual. Auto-plays a soundscape, shows manifestations
 /// one card at a time, and records a `sessions` row on completion.
@@ -814,66 +815,78 @@ class RitualCompleteScreen extends StatelessWidget {
             intensity: 0.55,
           ),
           CardVignette(dark: isDark),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-              child: Column(
-                children: [
-                  const Spacer(flex: 2),
-                  Icon(
-                    Icons.auto_awesome,
-                    size: 56,
-                    color: Accents.gold.withValues(alpha: 0.95),
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Beautiful.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: backdrop.text,
-                      fontFamily: 'Fraunces',
-                      fontSize: 36,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0.2,
+          // GestureDetector with opaque behavior guarantees that every
+          // tap inside the content layer is captured here instead of
+          // falling through to the decorative layers behind it.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onDone,
+            child: SafeArea(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+                child: Column(
+                  children: [
+                    const Spacer(flex: 2),
+                    Icon(
+                      Icons.auto_awesome,
+                      size: 56,
+                      color: Accents.gold.withValues(alpha: 0.95),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'You showed up for $cardsRead manifestation${cardsRead == 1 ? '' : 's'}\nin ${_formatDuration(duration)}.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: backdrop.text.withValues(alpha: 0.72),
-                      fontFamily: 'Inter',
-                      fontSize: 15,
-                      height: 1.5,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  const Spacer(flex: 3),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: buttonBg,
-                        foregroundColor: buttonFg,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      onPressed: onDone,
-                      child: const Text(
-                        'Done',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.4,
-                        ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Beautiful.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: backdrop.text,
+                        fontFamily: 'Fraunces',
+                        fontSize: 36,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.2,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                    const SizedBox(height: 14),
+                    Text(
+                      'You showed up for $cardsRead manifestation${cardsRead == 1 ? '' : 's'}\nin ${_formatDuration(duration)}.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: backdrop.text.withValues(alpha: 0.72),
+                        fontFamily: 'Inter',
+                        fontSize: 15,
+                        height: 1.5,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    const Spacer(flex: 3),
+                    SizedBox(
+                      width: double.infinity,
+                      child: WebTapOverlay(
+                        onTap: onDone,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: buttonBg,
+                            foregroundColor: buttonFg,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          onPressed: onDone,
+                          child: const Text(
+                            'Done',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
             ),
           ),
