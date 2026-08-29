@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sankalpa — Sparkle ?
+  Classic four-point sparkle: long vertical+horizontal axes, concave waists,
+  fine tapered tips. Hand-authored per Knowledge/sankalpa-brand.md §8.
+  Single fill path, viewBox 24x24, gold fill (#C8A24B).
+  Tinted at render time via flutter_svg's colorFilter for theme variants.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="#C8A24B">
+  <path d="M12 1.5
+           L13.1 9.6
+           A2 2 0 0 0 14.4 10.9
+           L22.5 12
+           L14.4 13.1
+           A2 2 0 0 0 13.1 14.4
+           L12 22.5
+           L10.9 14.4
+           A2 2 0 0 0 9.6 13.1
+           L1.5 12
+           L9.6 10.9
+           A2 2 0 0 0 10.9 9.6
+           Z" />
+</svg>

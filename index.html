@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="/sankalpa/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- viewport-fit=cover is required for iOS Safari to tint the bottom bar
+       from page/edge colours and for safe-area env() vars to resolve. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Sankalpa — a daily ritual for your manifestations.">
+  <meta name="theme-color" content="#EADFD0">
+
+  <!-- iOS / installable web app -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- black-translucent lets the ritual colour draw under the status bar in
+       standalone (Add to Home Screen) mode instead of a solid system fill. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sankalpa">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-precomposed.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png"/>
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon-64.png"/>
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Sankalpa">
+  <meta property="og:description" content="A daily ritual for your manifestations.">
+  <meta property="og:type" content="website">
+
+  <title>Sankalpa</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!--
+    Boot splash. Painted by the browser before any Flutter code downloads, so
+    the launch gap shows the brand mark instead of a blank page. Everything
+    here is inline (no extra requests, no webfont) so it renders on the first
+    paint; the real Fraunces wordmark arrives with the app.
+  -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #EADFD0;
+    }
+
+    #sankalpa-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #EADFD0;
+      opacity: 1;
+      transition: opacity 340ms ease-out;
+    }
+
+    #sankalpa-splash.is-hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #sankalpa-splash .stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #sankalpa-splash .glyph {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 120px;
+      height: 120px;
+    }
+
+    /* Soft bloom behind the mark so it reads as ambient light, not a spinner. */
+    #sankalpa-splash .halo {
+      position: absolute;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(
+        circle,
+        rgba(200, 162, 75, 0.20) 0%,
+        rgba(200, 162, 75, 0) 70%
+      );
+      animation: sankalpa-bloom 3.2s ease-in-out infinite;
+    }
+
+    #sankalpa-splash .mark {
+      position: relative;
+      width: 72px;
+      height: 72px;
+      animation: sankalpa-breathe 3.2s ease-in-out infinite;
+    }
+
+    /*
+      The breathing mark alone reads as decoration, not progress. This
+      indeterminate bar is the part that actually says "still working".
+    */
+    #sankalpa-splash .progress {
+      position: relative;
+      width: 132px;
+      height: 3px;
+      margin-top: 28px;
+      border-radius: 999px;
+      background: rgba(200, 162, 75, 0.22);
+      overflow: hidden;
+    }
+
+    #sankalpa-splash .progress span {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 40%;
+      border-radius: 999px;
+      background: #C8A24B;
+      animation: sankalpa-slide 1.5s ease-in-out infinite;
+    }
+
+    @keyframes sankalpa-breathe {
+      0%, 100% { transform: scale(0.92); opacity: 0.62; }
+      50%      { transform: scale(1.06); opacity: 1; }
+    }
+
+    @keyframes sankalpa-bloom {
+      0%, 100% { transform: scale(0.85); opacity: 0.55; }
+      50%      { transform: scale(1.12); opacity: 1; }
+    }
+
+    /* -100% parks the bar just off the left edge; 250% of its own 40% width
+       carries it just past the right edge. */
+    @keyframes sankalpa-slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+
+    @keyframes sankalpa-dim {
+      0%, 100% { opacity: 0.25; }
+      50%      { opacity: 1; }
+    }
+
+    /*
+      Reduced motion means less movement, not "no sign of life" — freezing
+      everything made the splash look hung. Drop the travelling and scaling,
+      keep a full-width bar fading in and out so progress is still legible.
+    */
+    @media (prefers-reduced-motion: reduce) {
+      #sankalpa-splash .mark,
+      #sankalpa-splash .halo {
+        animation: none;
+      }
+
+      #sankalpa-splash .progress span {
+        width: 100%;
+        transform: none;
+        animation: sankalpa-dim 1.8s ease-in-out infinite;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html, body,
+      #sankalpa-splash { background-color: #3E2B26; }
+
+      #sankalpa-splash .progress { background: rgba(200, 162, 75, 0.18); }
+    }
+  </style>
+</head>
+<body>
+  <div id="sankalpa-splash" role="status" aria-label="Loading Sankalpa">
+    <div class="stack">
+      <div class="glyph">
+        <div class="halo"></div>
+        <svg class="mark" viewBox="0 0 24 24" fill="#C8A24B" aria-hidden="true">
+          <path d="M12 1.5 L13.1 9.6 A2 2 0 0 0 14.4 10.9 L22.5 12 L14.4 13.1
+                   A2 2 0 0 0 13.1 14.4 L12 22.5 L10.9 14.4 A2 2 0 0 0 9.6 13.1
+                   L1.5 12 L9.6 10.9 A2 2 0 0 0 10.9 9.6 Z"/>
+        </svg>
+      </div>
+      <div class="progress"><span></span></div>
+    </div>
+  </div>
+
+  <script>
+    // Flutter fires `flutter-first-frame` once the engine has actually painted.
+    // Waiting for that (rather than for the bootstrap script to load) means the
+    // splash never hands over to an empty canvas.
+    (function () {
+      var splash = document.getElementById('sankalpa-splash');
+      if (!splash) return;
+      var done = false;
+
+      function hide() {
+        if (done) return;
+        done = true;
+        splash.classList.add('is-hidden');
+        // Also force display:none immediately so the node cannot
+        // intercept taps even before the removal timer fires.
+        splash.style.display = 'none';
+        window.setTimeout(function () {
+          if (splash.parentNode) splash.parentNode.removeChild(splash);
+        }, 400);
+      }
+
+      window.addEventListener('flutter-first-frame', hide);
+      // Never trap the user behind the splash if that event doesn't arrive.
+      window.setTimeout(hide, 20000);
+    })();
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    // PWA is paused for now. To eliminate stale-bundle bugs while we finish
+    // stabilising the app, aggressively unregister any existing service
+    // worker for this origin and wipe Sankalpa/Flutter caches, then let the
+    // app run as a plain web app with fresh network loads.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async function () {
+        const cleanupKey = 'sankalpa-sw-cleaned-v1';
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(function (r) { return r.unregister(); }));
+
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(
+              keys
+                .filter(function (key) {
+                  return key.indexOf('sankalpa-') === 0 ||
+                    key.indexOf('flutter-app-cache') !== -1 ||
+                    key.indexOf('flutter-temp-cache') !== -1 ||
+                    key.indexOf('flutter_assets') !== -1;
+                })
+                .map(function (key) { return caches.delete(key); }),
+            );
+          }
+
+          // Force exactly one clean reload after cache cleanup so the page
+          // immediately reboots from the network instead of continuing to run
+          // the stale JS bundle that was already in memory.
+          if (!sessionStorage.getItem(cleanupKey)) {
+            sessionStorage.setItem(cleanupKey, '1');
+            window.location.reload();
+          }
+        } catch (err) {
+          console.warn('SW cleanup failed:', err);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
