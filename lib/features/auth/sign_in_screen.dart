@@ -9,6 +9,7 @@ import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/widgets/friendly_error.dart';
 import 'package:sankalpa/widgets/logo.dart';
+import 'package:sankalpa/widgets/native_web_text_field.dart';
 
 /// Email sign-in via a 6-digit code.
 ///
@@ -242,8 +243,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onUseDifferentEmail: _useDifferentEmail,
                       )
                     else ...[
-                      _TappableField(
-                        focusNode: _emailFocus,
+                      NativeWebTextField(
+                        controller: _emailCtrl,
+                        inputType: 'email',
+                        inputMode: 'email',
+                        placeholder: 'you@example.com',
+                        autocomplete: 'email',
+                        onSubmitted: (_) => _send(),
                         child: TextFormField(
                           controller: _emailCtrl,
                           focusNode: _emailFocus,
@@ -298,31 +304,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Ensures a [TextField] or [TextFormField] receives focus when tapped
-/// anywhere on its visible bounds.
-///
-/// On Flutter web (especially iOS Safari in PWA mode), a `TextField` inside a
-/// `SingleChildScrollView` can fail to receive the tap because the scroll
-/// view's gesture recognizer captures the pointer event before the text
-/// field's focus mechanism processes it. Wrapping the field in a
-/// [GestureDetector] with [HitTestBehavior.opaque] and explicitly requesting
-/// focus guarantees tap-to-focus works on all web platforms.
-class _TappableField extends StatelessWidget {
-  const _TappableField({required this.focusNode, required this.child});
-
-  final FocusNode focusNode;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: focusNode.requestFocus,
-      child: child,
     );
   }
 }
@@ -382,8 +363,13 @@ class _CodeEntry extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        _TappableField(
-          focusNode: codeFocus,
+        NativeWebTextField(
+          controller: codeCtrl,
+          inputMode: 'numeric',
+          maxLength: 6,
+          autocomplete: 'one-time-code',
+          textAlign: 'center',
+          onSubmitted: (_) => onVerify(),
           child: TextField(
             controller: codeCtrl,
             focusNode: codeFocus,
