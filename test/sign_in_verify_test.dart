@@ -98,6 +98,52 @@ void main() {
   );
 
   testWidgets(
+    'tapping the left edge of the email field focuses it',
+    (tester) async {
+      final auth = _RecordingAuthController();
+      await _pumpSignIn(tester, auth);
+
+      final emailField = find.byType(TextFormField);
+      expect(emailField, findsOneWidget);
+
+      final box = tester.getRect(emailField);
+      await tester.tapAt(Offset(box.left + 4, box.center.dy));
+      await tester.pump();
+
+      expect(
+        tester.testTextInput.hasAnyClients,
+        isTrue,
+        reason: 'tapping the left edge of the email field must focus it',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
+    'tapping the right edge of the email field focuses it',
+    (tester) async {
+      final auth = _RecordingAuthController();
+      await _pumpSignIn(tester, auth);
+
+      final emailField = find.byType(TextFormField);
+      expect(emailField, findsOneWidget);
+
+      final box = tester.getRect(emailField);
+      await tester.tapAt(Offset(box.right - 4, box.center.dy));
+      await tester.pump();
+
+      expect(
+        tester.testTextInput.hasAnyClients,
+        isTrue,
+        reason: 'tapping the right edge of the email field must focus it',
+      );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
     'a single gesture requests one code, not two',
     (tester) async {
       // Requesting a code invalidates the previous one, so a duplicate send

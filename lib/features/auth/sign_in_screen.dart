@@ -33,6 +33,7 @@ class SignInScreen extends ConsumerStatefulWidget {
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _emailCtrl = TextEditingController();
+  final _emailFocus = FocusNode();
   final _codeCtrl = TextEditingController();
   final _codeFocus = FocusNode();
   final _formKey = GlobalKey<FormState>();
@@ -65,6 +66,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _cooldownTicker?.cancel();
     _cooldownSeconds.dispose();
     _emailCtrl.dispose();
+    _emailFocus.dispose();
     _codeCtrl.dispose();
     _codeFocus.dispose();
     super.dispose();
@@ -240,26 +242,30 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onUseDifferentEmail: _useDifferentEmail,
                       )
                     else ...[
-                      TextFormField(
-                        controller: _emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        autofillHints: const [AutofillHints.email],
-                        autocorrect: false,
-                        textInputAction: TextInputAction.send,
-                        onFieldSubmitted: (_) => _send(),
-                        enabled: !_sending,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          hintText: 'you@example.com',
+                      _TappableField(
+                        focusNode: _emailFocus,
+                        child: TextFormField(
+                          controller: _emailCtrl,
+                          focusNode: _emailFocus,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.email],
+                          autocorrect: false,
+                          textInputAction: TextInputAction.send,
+                          onFieldSubmitted: (_) => _send(),
+                          enabled: !_sending,
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            hintText: 'you@example.com',
+                          ),
+                          validator: (v) {
+                            final s = (v ?? '').trim();
+                            if (s.isEmpty) return 'Enter your email';
+                            if (!s.contains('@') || !s.contains('.')) {
+                              return 'That doesn\u2019t look like an email';
+                            }
+                            return null;
+                          },
                         ),
-                        validator: (v) {
-                          final s = (v ?? '').trim();
-                          if (s.isEmpty) return 'Enter your email';
-                          if (!s.contains('@') || !s.contains('.')) {
-                            return 'That doesn\u2019t look like an email';
-                          }
-                          return null;
-                        },
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 12),
@@ -292,6 +298,31 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Ensures a [TextField] or [TextFormField] receives focus when tapped
+/// anywhere on its visible bounds.
+///
+/// On Flutter web (especially iOS Safari in PWA mode), a `TextField` inside a
+/// `SingleChildScrollView` can fail to receive the tap because the scroll
+/// view's gesture recognizer captures the pointer event before the text
+/// field's focus mechanism processes it. Wrapping the field in a
+/// [GestureDetector] with [HitTestBehavior.opaque] and explicitly requesting
+/// focus guarantees tap-to-focus works on all web platforms.
+class _TappableField extends StatelessWidget {
+  const _TappableField({required this.focusNode, required this.child});
+
+  final FocusNode focusNode;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: focusNode.requestFocus,
+      child: child,
     );
   }
 }
@@ -351,39 +382,29 @@ class _CodeEntry extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        TextField(
-          controller: codeCtrl,
+        _TappableField(
           focusNode: codeFocus,
-          enabled: !verifying,
-          // Numeric keypad on mobile; long-press still surfaces the
-          // system clipboard menu so pasting a code from email works.
-          keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.done,
-          autofillHints: const [AutofillHints.oneTimeCode],
-          onSubmitted: (_) => onVerify(),
-          // Do not auto-submit at six digits. In particular, iOS one-time-code
-          // autofill can invoke onChanged while its platform editing state is
-          // still settling. That creates a hidden verification attempt before
-          // the user taps Sign in, making a subsequent failure look like the
-          // first attempt. Verification is deliberately explicit: the button
-          // below or the keyboard's Done action.
-          textAlign: TextAlign.center,
-          maxLength: 6,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            letterSpacing: 6,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-          inputFormatters: [
-            // Strip anything non-digit on the fly so a paste of
-            // "  123 456 " collapses cleanly to "123456".
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(6),
-          ],
-          decoration: const InputDecoration(
-            counterText: '',
-            // No hintText — the prior "000000" placeholder looked like
-            // a real entered value because of the wide letter-spacing.
-            // The label below the field tells the user what to do.
+          child: TextField(
+            controller: codeCtrl,
+            focusNode: codeFocus,
+            enabled: !verifying,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.oneTimeCode],
+            onSubmitted: (_) => onVerify(),
+            textAlign: TextAlign.center,
+            maxLength: 6,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              letterSpacing: 6,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            decoration: const InputDecoration(
+              counterText: '',
+            ),
           ),
         ),
         const SizedBox(height: 6),
