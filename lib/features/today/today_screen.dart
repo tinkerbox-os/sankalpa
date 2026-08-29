@@ -14,6 +14,7 @@ import 'package:sankalpa/data/web/install_prompt.dart';
 import 'package:sankalpa/widgets/card_ambient_decoration.dart';
 import 'package:sankalpa/widgets/logo.dart';
 import 'package:sankalpa/widgets/soundscape_picker.dart';
+import 'package:sankalpa/widgets/web_tap_overlay.dart';
 
 /// Home / "Today" screen.
 ///
@@ -505,28 +506,31 @@ class _RitualCta extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  FilledButton(
-                    style: ButtonStyle(
-                      padding: const WidgetStatePropertyAll(
-                        EdgeInsets.symmetric(vertical: 16),
+                  WebTapOverlay(
+                    onTap: enabled && hasAny ? onStart : null,
+                    child: FilledButton(
+                      style: ButtonStyle(
+                        padding: const WidgetStatePropertyAll(
+                          EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        backgroundColor:
+                            WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.disabled)) {
+                            return buttonBg.withValues(alpha: 0.4);
+                          }
+                          if (states.contains(WidgetState.pressed)) {
+                            return buttonBgPressed;
+                          }
+                          return buttonBg;
+                        }),
+                        foregroundColor:
+                            WidgetStatePropertyAll(backdrop.text),
+                        overlayColor:
+                            WidgetStatePropertyAll(buttonBgPressed),
                       ),
-                      backgroundColor:
-                          WidgetStateProperty.resolveWith((states) {
-                        if (states.contains(WidgetState.disabled)) {
-                          return buttonBg.withValues(alpha: 0.4);
-                        }
-                        if (states.contains(WidgetState.pressed)) {
-                          return buttonBgPressed;
-                        }
-                        return buttonBg;
-                      }),
-                      foregroundColor:
-                          WidgetStatePropertyAll(backdrop.text),
-                      overlayColor:
-                          WidgetStatePropertyAll(buttonBgPressed),
+                      onPressed: enabled && hasAny ? onStart : null,
+                      child: const Text('Start ritual'),
                     ),
-                    onPressed: enabled && hasAny ? onStart : null,
-                    child: const Text('Start ritual'),
                   ),
                 ],
               ),

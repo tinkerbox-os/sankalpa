@@ -1,15 +1,20 @@
 import 'dart:js_interop';
-import 'dart:ui_web' as ui_web;
 
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:web/web.dart' as web;
 
-/// Web implementation: overlays a native `<input>` on top of the Flutter field.
+/// Web implementation — injects a real HTML `<input>` as a child of
+/// `document.body`, positioned with `position: fixed` to cover the Flutter
+/// field's viewport rect.
 ///
-/// The native element receives the user's tap directly from the browser, which
-/// satisfies iOS Safari standalone mode's security requirement and opens the
-/// on-screen keyboard.  Text flows from the native input → [controller] →
-/// Flutter field (which handles all visual rendering).
+/// This is NOT an `HtmlElementView` / platform-view approach. The native
+/// element is a direct DOM sibling of Flutter's glass-pane, placed at a
+/// z-index above the canvas. On iOS Safari standalone (PWA) mode, the user's
+/// tap lands on this real `<input>`, the browser recognises the user gesture,
+/// and the keyboard opens. Text flows from the native element → the shared
+/// [TextEditingController] → the Flutter field underneath (which handles all
+/// Material visual rendering).
 class NativeWebTextField extends StatefulWidget {
   const NativeWebTextField({
     required this.child,
@@ -24,47 +29,33 @@ class NativeWebTextField extends StatefulWidget {
     this.onSubmitted,
   });
 
-  /// The Flutter text field rendered underneath (provides visual chrome).
   final Widget child;
-
-  /// Shared controller — the native input writes to it, the Flutter field
-  /// reads from it.
   final TextEditingController controller;
-
-  /// HTML `type` attribute (`email`, `text`, `number`, …).
   final String inputType;
-
-  /// HTML `inputmode` attribute (`numeric`, `email`, …).
   final String? inputMode;
-
   final String placeholder;
   final int? maxLength;
-
-  /// HTML `autocomplete` attribute (`email`, `one-time-code`, …).
   final String? autocomplete;
-
-  /// CSS `text-align` value for the native input.
   final String textAlign;
-
-  /// Fired when the user presses Enter / Done.
   final ValueChanged<String>? onSubmitted;
 
   @override
   State<NativeWebTextField> createState() => _NativeWebTextFieldState();
 }
 
-class _NativeWebTextFieldState extends State<NativeWebTextField> {
-  static int _nextId = 0;
-  late final String _viewType;
-  web.HTMLInputElement? _inputElement;
+class _NativeWebTextFieldState extends State<NativeWebTextField>
+    with WidgetsBindingObserver {
+  final GlobalKey _key = GlobalKey();
+  web.HTMLInputElement? _el;
   bool _syncing = false;
 
   @override
   void initState() {
     super.initState();
-    _viewType = 'sankalpa-native-input-${_nextId++}';
-    ui_web.platformViewRegistry.registerViewFactory(_viewType, _factory);
+    WidgetsBinding.instance.addObserver(this);
+    _createInput();
     widget.controller.addListener(_onControllerChanged);
+    SchedulerBinding.instance.addPostFrameCallback((_) => _reposition());
   }
 
   @override
@@ -73,40 +64,63 @@ class _NativeWebTextFieldState extends State<NativeWebTextField> {
     if (old.controller != widget.controller) {
       old.controller.removeListener(_onControllerChanged);
       widget.controller.addListener(_onControllerChanged);
-      _pushToNative(widget.controller.text);
     }
+    SchedulerBinding.instance.addPostFrameCallback((_) => _reposition());
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    _removeInput();
     super.dispose();
   }
 
-  web.HTMLElement _factory(int viewId) {
+  @override
+  void didChangeMetrics() => _reposition();
+
+  void _createInput() {
     final input = web.document.createElement('input') as web.HTMLInputElement;
-    _inputElement = input;
+    _el = input;
 
     input
       ..type = widget.inputType
       ..placeholder = widget.placeholder
       ..value = widget.controller.text;
 
-    if (widget.maxLength != null) {
-      input.maxLength = widget.maxLength!;
-    }
-    if (widget.autocomplete != null) {
-      input.autocomplete = widget.autocomplete!;
-    }
+    if (widget.maxLength != null) input.maxLength = widget.maxLength!;
+    if (widget.autocomplete != null) input.autocomplete = widget.autocomplete!;
     if (widget.inputMode != null) {
       input.setAttribute('inputmode', widget.inputMode!);
     }
+    input.setAttribute('aria-hidden', 'true');
 
-    // Transparent text so only the Flutter field's rendering is visible.
-    // `caret-color` stays opaque so the user sees a blinking cursor.
-    input.style.cssText = [
-      'width:100%',
-      'height:100%',
+    _applyBaseStyle(input);
+
+    input.addEventListener(
+      'input',
+      (web.Event _) { _pullFromNative(); }.toJS,
+    );
+    input.addEventListener(
+      'keydown',
+      (web.Event ev) {
+        if ((ev as web.KeyboardEvent).key == 'Enter') {
+          widget.onSubmitted?.call(input.value);
+        }
+      }.toJS,
+    );
+
+    web.document.body?.append(input);
+  }
+
+  void _removeInput() {
+    _el?.remove();
+    _el = null;
+  }
+
+  void _applyBaseStyle(web.HTMLInputElement el) {
+    el.style.cssText = [
+      'position:fixed',
       'box-sizing:border-box',
       'border:none',
       'outline:none',
@@ -117,63 +131,67 @@ class _NativeWebTextFieldState extends State<NativeWebTextField> {
       'padding:20px 12px 8px',
       'margin:0',
       'text-align:${widget.textAlign}',
-      // Prevent iOS zoom-on-focus (minimum 16px already satisfies this).
+      'z-index:999',
       '-webkit-text-size-adjust:100%',
+      // Start off-screen until positioned.
+      'left:-9999px',
+      'top:-9999px',
+      'width:0',
+      'height:0',
     ].join(';');
-
-    input.addEventListener(
-      'input',
-      (web.Event _) { _pullFromNative(); }.toJS,
-    );
-
-    input.addEventListener(
-      'keydown',
-      (web.Event event) {
-        if ((event as web.KeyboardEvent).key == 'Enter') {
-          widget.onSubmitted?.call(input.value);
-        }
-      }.toJS,
-    );
-
-    return input;
   }
 
-  /// Native input → Flutter controller.
+  /// Map the Flutter widget's global rect to CSS `fixed` coordinates.
+  void _reposition() {
+    final el = _el;
+    if (el == null || !mounted) return;
+
+    final ro = _key.currentContext?.findRenderObject();
+    if (ro is! RenderBox || !ro.hasSize) return;
+
+    // Flutter logical offset from the top-left of the window.
+    final topLeft = ro.localToGlobal(Offset.zero);
+    final size = ro.size;
+
+    // Flutter logical pixels → CSS pixels.
+    // Flutter's window.devicePixelRatio applies between logical px and
+    // physical px, but CSS `fixed` positioning uses CSS px which on
+    // high-DPI Safari maps 1:1 to Flutter logical px (the engine sets
+    // the <flt-glass-pane> transform to cancel the DPR). So we use
+    // the logical coordinates directly.
+    final left = topLeft.dx;
+    final top = topLeft.dy;
+    final width = size.width;
+    final height = size.height;
+
+    el.style
+      ..left = '${left}px'
+      ..top = '${top}px'
+      ..width = '${width}px'
+      ..height = '${height}px';
+  }
+
   void _pullFromNative() {
-    final el = _inputElement;
+    final el = _el;
     if (el == null) return;
     _syncing = true;
     widget.controller.text = el.value;
     _syncing = false;
   }
 
-  /// Flutter controller → native input (e.g. programmatic clear).
   void _onControllerChanged() {
     if (_syncing) return;
-    _pushToNative(widget.controller.text);
-  }
-
-  void _pushToNative(String text) {
-    final el = _inputElement;
+    final el = _el;
     if (el == null) return;
-    if (el.value != text) {
-      el.value = text;
+    if (el.value != widget.controller.text) {
+      el.value = widget.controller.text;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // Visual layer: the Flutter TextFormField for decoration, label,
-        // validation errors, and theme integration.
-        widget.child,
-        // Interactive layer: a real HTML <input> that captures taps so
-        // the browser opens the keyboard in standalone PWA mode.
-        Positioned.fill(
-          child: HtmlElementView(viewType: _viewType),
-        ),
-      ],
-    );
+    // The child is the visual Flutter field; we assign _key so we can
+    // read its viewport rect for positioning the DOM overlay.
+    return KeyedSubtree(key: _key, child: widget.child);
   }
 }

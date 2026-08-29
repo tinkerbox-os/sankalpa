@@ -16,6 +16,7 @@ import 'package:sankalpa/data/repositories/session_repository.dart';
 import 'package:sankalpa/data/repositories/soundscape_repository.dart';
 import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:sankalpa/widgets/card_ambient_decoration.dart';
+import 'package:sankalpa/widgets/web_tap_overlay.dart';
 
 /// Full-screen daily ritual. Auto-plays a soundscape, shows manifestations
 /// one card at a time, and records a `sessions` row on completion.
@@ -859,23 +860,26 @@ class RitualCompleteScreen extends StatelessWidget {
                     const Spacer(flex: 3),
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: buttonBg,
-                          foregroundColor: buttonFg,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 18),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
+                      child: WebTapOverlay(
+                        onTap: onDone,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: buttonBg,
+                            foregroundColor: buttonFg,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
-                        ),
-                        onPressed: onDone,
-                        child: const Text(
-                          'Done',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.4,
+                          onPressed: onDone,
+                          child: const Text(
+                            'Done',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.4,
+                            ),
                           ),
                         ),
                       ),

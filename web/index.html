@@ -213,6 +213,9 @@
         if (done) return;
         done = true;
         splash.classList.add('is-hidden');
+        // Also force display:none immediately so the node cannot
+        // intercept taps even before the removal timer fires.
+        splash.style.display = 'none';
         window.setTimeout(function () {
           if (splash.parentNode) splash.parentNode.removeChild(splash);
         }, 400);
