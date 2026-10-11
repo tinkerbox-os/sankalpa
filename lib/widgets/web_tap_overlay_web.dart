@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:js_interop';
 
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+import 'package:sankalpa/widgets/paint_notifier.dart';
 import 'package:web/web.dart' as web;
 
 /// Web implementation — injects a transparent DOM `<div>` as a child of
@@ -36,6 +38,14 @@ class _WebTapOverlayState extends State<WebTapOverlay>
   web.HTMLElement? _el;
   JSFunction? _clickHandler;
   ScrollPosition? _scrollPosition;
+  bool _repositionScheduled = false;
+  // Safety net against any missed layout event: a stale overlay sitting over
+  // another control steals its taps (this is how the sign-in email field's
+  // first tap became an "Email me a code" press).
+  Timer? _resyncTimer;
+
+  static final bool _debugOverlays =
+      Uri.base.queryParameters['debugOverlays'] == '1';
 
   @override
   void initState() {
@@ -43,6 +53,22 @@ class _WebTapOverlayState extends State<WebTapOverlay>
     WidgetsBinding.instance.addObserver(this);
     _createOverlay();
     SchedulerBinding.instance.addPostFrameCallback((_) => _reposition());
+    _resyncTimer = Timer.periodic(
+      const Duration(milliseconds: 250),
+      (_) => _reposition(),
+    );
+  }
+
+  /// Re-measure after the next layout. Measuring synchronously (e.g. inside
+  /// didChangeMetrics) reads the *previous* layout and parks the overlay on
+  /// whatever used to be there.
+  void _scheduleReposition() {
+    if (_repositionScheduled) return;
+    _repositionScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _repositionScheduled = false;
+      _reposition();
+    });
   }
 
   @override
@@ -63,6 +89,7 @@ class _WebTapOverlayState extends State<WebTapOverlay>
 
   @override
   void dispose() {
+    _resyncTimer?.cancel();
     _scrollPosition?.removeListener(_reposition);
     WidgetsBinding.instance.removeObserver(this);
     _removeOverlay();
@@ -70,7 +97,7 @@ class _WebTapOverlayState extends State<WebTapOverlay>
   }
 
   @override
-  void didChangeMetrics() => _reposition();
+  void didChangeMetrics() => _scheduleReposition();
 
   void _createOverlay() {
     final div = web.document.createElement('div') as web.HTMLElement;
@@ -89,6 +116,7 @@ class _WebTapOverlayState extends State<WebTapOverlay>
       'top:-9999px',
       'width:0',
       'height:0',
+      if (_debugOverlays) 'outline:2px dashed #2196F3',
     ].join(';');
     _syncPointerEvents();
     _rebindClick();
@@ -167,6 +195,9 @@ class _WebTapOverlayState extends State<WebTapOverlay>
 
   @override
   Widget build(BuildContext context) {
-    return KeyedSubtree(key: _key, child: widget.child);
+    return PaintNotifier(
+      onPaint: _scheduleReposition,
+      child: KeyedSubtree(key: _key, child: widget.child),
+    );
   }
 }

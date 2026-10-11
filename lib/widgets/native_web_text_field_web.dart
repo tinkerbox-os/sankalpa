@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:js_interop';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:sankalpa/app/platform/web_keyboard_inset.dart';
+import 'package:sankalpa/widgets/paint_notifier.dart';
 import 'package:web/web.dart' as web;
 
 /// Real DOM `<input>` appended to `document.body`, positioned over a Flutter
@@ -63,6 +66,11 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
   // Mirrors the FormField error so the DOM border can turn red with it.
   bool _hasError = false;
   bool _focused = false;
+  // Safety net: re-measure a few times a second so no missed layout event
+  // (font load, viewport settle on launch, keyboard animation) can leave
+  // the <input> somewhere other than over its Flutter box.
+  Timer? _resyncTimer;
+  ValueListenable<double>? _keyboardInset;
 
   @override
   void initState() {
@@ -76,6 +84,33 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
       _ensureInput();
       _syncGeometry();
     });
+    _resyncTimer = Timer.periodic(
+      const Duration(milliseconds: 250),
+      (_) => _syncGeometry(),
+    );
+    _keyboardInset = WebKeyboardInset.listenable
+      ..addListener(_onKeyboardInsetChanged);
+  }
+
+  /// When the keyboard opens (or changes height) while this field is focused,
+  /// scroll it into the space above the keyboard. The screen adds bottom
+  /// padding equal to the inset so there is room to scroll.
+  void _onKeyboardInsetChanged() {
+    _scheduleGeometrySync();
+    if (!_focused) return;
+    SchedulerBinding.instance.addPostFrameCallback((_) => _revealAboveKeyboard());
+  }
+
+  void _revealAboveKeyboard() {
+    if (!mounted) return;
+    final ctx = _anchorKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    ).whenComplete(_syncGeometry);
   }
 
   @override
@@ -117,6 +152,8 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _resyncTimer?.cancel();
+    _keyboardInset?.removeListener(_onKeyboardInsetChanged);
     _scrollPosition?.removeListener(_scheduleGeometrySync);
     widget.controller.removeListener(_syncFromController);
     widget.focusNode?.removeListener(_syncFocusFromFlutter);
@@ -181,7 +218,23 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
       '-webkit-appearance:none',
       'appearance:none',
       'opacity:1',
+      '-webkit-tap-highlight-color:transparent',
+      'touch-action:manipulation',
+      if (_debugOverlays) 'outline:2px dashed #E91E63',
     ].join(';');
+
+    // Focus synchronously inside the user's gesture. If anything upstream
+    // cancelled the default touch behaviour, WebKit would skip the native
+    // focus and the keyboard; an explicit focus() in touchend still counts
+    // as user activation on iOS standalone.
+    final focusNow = ((web.Event _) {
+      if (web.document.activeElement != input && !input.disabled) {
+        input.focus();
+      }
+    }).toJS;
+    input
+      ..addEventListener('touchend', focusNow)
+      ..addEventListener('click', focusNow);
 
     // Do NOT call Flutter FocusNode.requestFocus() from these handlers —
     // that makes the engine attach its own editing overlay and steals the
@@ -189,10 +242,17 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
     input.onFocus.listen((_) {
       _focused = true;
       _applyBorder();
+      WebKeyboardInset.refresh();
+      // If the keyboard is already up (switching fields), reveal now.
+      SchedulerBinding.instance.addPostFrameCallback(
+        (_) => _revealAboveKeyboard(),
+      );
+      SchedulerBinding.instance.scheduleFrame();
     });
     input.onBlur.listen((_) {
       _focused = false;
       _applyBorder();
+      WebKeyboardInset.refresh();
     });
     input.onInput.listen((_) {
       var next = input.value;
@@ -340,6 +400,9 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
     return 'left';
   }
 
+  static final bool _debugOverlays =
+      Uri.base.queryParameters['debugOverlays'] == '1';
+
   double _fontSize() {
     final size = widget.style?.fontSize ?? 16;
     return size < 16 ? 16 : size;
@@ -367,10 +430,6 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final label = widget.decoration?.labelText;
-    final fill =
-        widget.decoration?.fillColor ??
-        theme.inputDecorationTheme.fillColor ??
-        theme.colorScheme.surfaceContainerHighest;
     _scheduleGeometrySync();
 
     return NotificationListener<ScrollNotification>(
@@ -416,21 +475,16 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
                   ],
                   // Placeholder reserves layout space; the real <input> is a
                   // body-level overlay painted on top of this rect.
-                  _PaintNotifier(
+                  // Reserves layout space only. The body-level <input>
+                  // draws the whole field (fill, border, text, placeholder),
+                  // so if the two ever drift apart for a frame there is no
+                  // second box to show as a ghost.
+                  PaintNotifier(
                     onPaint: _scheduleGeometrySync,
-                    child: Container(
+                    child: SizedBox(
                       key: _anchorKey,
                       height: 56,
                       width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: fill,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withValues(
-                            alpha: 0.35,
-                          ),
-                        ),
-                      ),
                     ),
                   ),
                   if (error != null) ...[
@@ -449,41 +503,5 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
         },
       ),
     );
-  }
-}
-
-/// Calls [onPaint] whenever its subtree paints.
-///
-/// Layout shifts that do not rebuild this widget (the logo image finishing
-/// loading, the error line appearing, the keyboard resizing the view) still
-/// repaint the anchor, so the body-level <input> follows the Flutter
-/// placeholder instead of sitting at a stale rect where taps miss it.
-class _PaintNotifier extends SingleChildRenderObjectWidget {
-  const _PaintNotifier({required this.onPaint, super.child});
-
-  final VoidCallback onPaint;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderPaintNotifier(onPaint);
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    _RenderPaintNotifier renderObject,
-  ) {
-    renderObject.onPaint = onPaint;
-  }
-}
-
-class _RenderPaintNotifier extends RenderProxyBox {
-  _RenderPaintNotifier(this.onPaint);
-
-  VoidCallback onPaint;
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    super.paint(context, offset);
-    onPaint();
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sankalpa/app/platform/app_chrome.dart';
+import 'package:sankalpa/app/platform/web_keyboard_inset.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/errors/app_error.dart';
@@ -212,7 +214,21 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       body: SafeArea(
-        child: Center(
+        // The keyboard opened by the DOM inputs does not resize Flutter's
+        // view on iOS, so make room for it ourselves; the focused field then
+        // scrolls into the space above the keyboard.
+        child: ValueListenableBuilder<double>(
+          valueListenable: WebKeyboardInset.listenable,
+          builder: (context, inset, child) => Padding(
+            padding: EdgeInsets.only(
+              bottom: math.max(
+                0,
+                inset - MediaQuery.viewPaddingOf(context).bottom,
+              ),
+            ),
+            child: child,
+          ),
+          child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: SingleChildScrollView(
@@ -320,6 +336,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 ),
               ),
             ),
+          ),
           ),
         ),
       ),
