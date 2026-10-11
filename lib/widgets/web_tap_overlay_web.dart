@@ -3,6 +3,8 @@ import 'dart:js_interop';
 
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+import 'package:sankalpa/widgets/dom_overlay_support_web.dart';
+import 'package:sankalpa/widgets/overlay_tap_routing.dart';
 import 'package:sankalpa/widgets/paint_notifier.dart';
 import 'package:web/web.dart' as web;
 
@@ -146,10 +148,43 @@ class _WebTapOverlayState extends State<WebTapOverlay>
     if (widget.onTap == null) return;
     final handler = (web.Event ev) {
       ev.stopPropagation();
-      widget.onTap?.call();
+      _handleTap(ev);
     }.toJS;
     _clickHandler = handler;
     el.addEventListener('click', handler);
+  }
+
+  /// Decide what the tap is for using where things are *now*, not where this
+  /// overlay was last parked. A tap over a text field focuses that field
+  /// (still inside the gesture, so iOS opens the keyboard); a tap outside
+  /// the button's current rect is dropped instead of firing onTap.
+  void _handleTap(web.Event ev) {
+    final onTap = widget.onTap;
+    if (onTap == null || !mounted) return;
+    if (!ev.isA<web.MouseEvent>()) {
+      onTap();
+      return;
+    }
+    final mouse = ev as web.MouseEvent;
+    final targets = OverlayInputs.targets;
+    final decision = routeOverlayTap(
+      point: Offset(mouse.clientX.toDouble(), mouse.clientY.toDouble()),
+      buttonRect: viewportRectOf(
+        _key.currentContext?.findRenderObject() as RenderBox?,
+      ),
+      inputRects: [
+        for (final t in targets) t.currentViewportRect() ?? Rect.zero,
+      ],
+    );
+    switch (decision) {
+      case FocusInput(:final index):
+        targets[index].focusFromGesture();
+        _scheduleReposition();
+      case FireButton():
+        onTap();
+      case IgnoreTap():
+        _scheduleReposition();
+    }
   }
 
   void _removeOverlay() {
@@ -186,9 +221,10 @@ class _WebTapOverlayState extends State<WebTapOverlay>
       return;
     }
 
+    final origin = flutterViewOrigin();
     el.style
-      ..left = '${topLeft.dx}px'
-      ..top = '${topLeft.dy}px'
+      ..left = '${topLeft.dx + origin.dx}px'
+      ..top = '${topLeft.dy + origin.dy}px'
       ..width = '${size.width}px'
       ..height = '${size.height}px';
   }

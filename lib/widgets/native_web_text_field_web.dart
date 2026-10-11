@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:sankalpa/app/platform/web_keyboard_inset.dart';
+import 'package:sankalpa/widgets/dom_overlay_support_web.dart';
 import 'package:sankalpa/widgets/paint_notifier.dart';
 import 'package:web/web.dart' as web;
 
@@ -57,7 +58,8 @@ class NativeWebTextFieldView extends StatefulWidget {
 }
 
 class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver
+    implements OverlayInputTarget {
   final GlobalKey _anchorKey = GlobalKey();
   web.HTMLInputElement? _input;
   bool _syncingFromDom = false;
@@ -90,6 +92,25 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
     );
     _keyboardInset = WebKeyboardInset.listenable
       ..addListener(_onKeyboardInsetChanged);
+    OverlayInputs.register(this);
+  }
+
+  @override
+  Rect? currentViewportRect() {
+    final ctx = _anchorKey.currentContext;
+    return viewportRectOf(ctx?.findRenderObject() as RenderBox?);
+  }
+
+  /// Called synchronously from inside a user gesture (a tap that reached
+  /// Flutter's canvas over this field, or a tap overlay handing the tap
+  /// over). Move the input onto the field first, then focus it while the
+  /// gesture is still active so iOS opens the keyboard.
+  @override
+  void focusFromGesture() {
+    _syncGeometry();
+    final input = _input;
+    if (input == null || input.disabled) return;
+    if (web.document.activeElement != input) input.focus();
   }
 
   /// When the keyboard opens (or changes height) while this field is focused,
@@ -152,6 +173,7 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    OverlayInputs.unregister(this);
     _resyncTimer?.cancel();
     _keyboardInset?.removeListener(_onKeyboardInsetChanged);
     _scrollPosition?.removeListener(_scheduleGeometrySync);
@@ -220,6 +242,11 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
       'opacity:1',
       '-webkit-tap-highlight-color:transparent',
       'touch-action:manipulation',
+      // Flutter puts user-select:none on <body>, which this input would
+      // inherit. WebKit can refuse to focus / edit a non-selectable input.
+      '-webkit-user-select:text',
+      'user-select:text',
+      '-webkit-touch-callout:default',
       if (_debugOverlays) 'outline:2px dashed #E91E63',
     ].join(';');
 
@@ -309,25 +336,26 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
     final input = _input;
     final ctx = _anchorKey.currentContext;
     if (input == null || ctx == null) return;
-    final box = ctx.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize || !box.attached) {
-      input.style.visibility = 'hidden';
-      return;
-    }
-    final offset = box.localToGlobal(Offset.zero);
-    final size = box.size;
-    // Off-screen / zero-size anchors (e.g. scrolled away) stay hidden so they
-    // cannot intercept taps meant for other controls.
-    if (size.width <= 0 || size.height <= 0) {
-      input.style.visibility = 'hidden';
+    // Viewport coordinates: Flutter's local-to-global plus where the Flutter
+    // view itself sits on the page, so a page/view offset at launch cannot
+    // park the input away from its box.
+    final rect = viewportRectOf(ctx.findRenderObject() as RenderBox?);
+    if (rect == null) {
+      // Off-screen / not laid out. Park it rather than hide it: iOS refuses
+      // to focus an input that is visibility:hidden at tap time.
+      input.style
+        ..left = '-9999px'
+        ..top = '-9999px';
       return;
     }
     input.style
       ..visibility = 'visible'
-      ..left = '${offset.dx}px'
-      ..top = '${offset.dy}px'
-      ..width = '${size.width}px'
-      ..height = '${size.height}px';
+      ..display = 'block'
+      ..pointerEvents = 'auto'
+      ..left = '${rect.left}px'
+      ..top = '${rect.top}px'
+      ..width = '${rect.width}px'
+      ..height = '${rect.height}px';
   }
 
   void _syncFromController() {
@@ -481,10 +509,17 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
                   // second box to show as a ghost.
                   PaintNotifier(
                     onPaint: _scheduleGeometrySync,
-                    child: SizedBox(
-                      key: _anchorKey,
-                      height: 56,
-                      width: double.infinity,
+                    // Fallback: if a tap ever reaches Flutter's canvas over
+                    // this field (the DOM input was not on top of it),
+                    // hand it to the input inside the same gesture.
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerUp: (_) => focusFromGesture(),
+                      child: SizedBox(
+                        key: _anchorKey,
+                        height: 56,
+                        width: double.infinity,
+                      ),
                     ),
                   ),
                   if (error != null) ...[
