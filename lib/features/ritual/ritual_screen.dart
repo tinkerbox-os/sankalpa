@@ -20,6 +20,13 @@ import 'package:sankalpa/widgets/web_tap_overlay.dart';
 
 /// Full-screen daily ritual. Auto-plays a soundscape, shows manifestations
 /// one card at a time, and records a `sessions` row on completion.
+
+/// Converts a [Color] to a `#RRGGBB` CSS hex string.
+String cssColorHex(Color color) {
+  final rgb = color.toARGB32() & 0x00FFFFFF;
+  return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+}
+
 ///
 /// UX rules from the brief:
 /// - Tap or swipe to advance. No auto-advance — user controls pace.
@@ -121,10 +128,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     );
   }
 
-  String _cssColor(Color color) {
-    final rgb = color.toARGB32() & 0x00FFFFFF;
-    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
-  }
+  String _cssColor(Color color) => cssColorHex(color);
 
   Future<void> _onPageChanged(int i) async {
     setState(() {
@@ -772,7 +776,7 @@ class _ErrorView extends StatelessWidget {
 /// as the ritual itself — no jarring jump back to a bright sheet.
 ///
 /// Public so widget tests can guard against hard-coding chocolate here.
-class RitualCompleteScreen extends StatelessWidget {
+class RitualCompleteScreen extends StatefulWidget {
   const RitualCompleteScreen({
     required this.cardsRead,
     required this.duration,
@@ -786,6 +790,29 @@ class RitualCompleteScreen extends StatelessWidget {
   final String themeId;
   final VoidCallback onDone;
 
+  @override
+  State<RitualCompleteScreen> createState() => _RitualCompleteScreenState();
+}
+
+class _RitualCompleteScreenState extends State<RitualCompleteScreen> {
+  @override
+  void initState() {
+    super.initState();
+    final bg = CardBackdropTheme.fromId(widget.themeId).bg;
+    setBrowserThemeColor(cssColorHex(bg), edgeTints: true);
+    final iconBrightness =
+        bg.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light;
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: bg,
+        statusBarIconBrightness: iconBrightness,
+        statusBarBrightness: iconBrightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark,
+      ),
+    );
+  }
+
   String _formatDuration(Duration d) {
     if (d.inMinutes < 1) return '${d.inSeconds}s';
     final m = d.inMinutes;
@@ -795,7 +822,7 @@ class RitualCompleteScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final backdrop = CardBackdropTheme.fromId(themeId);
+    final backdrop = CardBackdropTheme.fromId(widget.themeId);
     final isDark = backdrop.bg.computeLuminance() < 0.5;
     final buttonBg = isDark
         ? Colors.white.withValues(alpha: 0.95)
@@ -817,12 +844,9 @@ class RitualCompleteScreen extends StatelessWidget {
             intensity: 0.55,
           ),
           CardVignette(dark: isDark),
-          // GestureDetector with opaque behavior guarantees that every
-          // tap inside the content layer is captured here instead of
-          // falling through to the decorative layers behind it.
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: onDone,
+            onTap: widget.onDone,
             child: SafeArea(
               child: Padding(
                 padding:
@@ -849,7 +873,7 @@ class RitualCompleteScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      'You showed up for $cardsRead manifestation${cardsRead == 1 ? '' : 's'}\nin ${_formatDuration(duration)}.',
+                      'You showed up for ${widget.cardsRead} manifestation${widget.cardsRead == 1 ? '' : 's'}\nin ${_formatDuration(widget.duration)}.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: backdrop.text.withValues(alpha: 0.72),
@@ -863,7 +887,7 @@ class RitualCompleteScreen extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       child: WebTapOverlay(
-                        onTap: onDone,
+                        onTap: widget.onDone,
                         child: FilledButton(
                           style: FilledButton.styleFrom(
                             backgroundColor: buttonBg,
@@ -874,7 +898,7 @@ class RitualCompleteScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(999),
                             ),
                           ),
-                          onPressed: onDone,
+                          onPressed: widget.onDone,
                           child: const Text(
                             'Done',
                             style: TextStyle(
