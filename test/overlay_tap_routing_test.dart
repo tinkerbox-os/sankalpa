@@ -67,6 +67,31 @@ void main() {
       expect(src.contains('flutterViewOrigin()'), isTrue);
     });
 
+    test('sign-in buttons are plain Flutter buttons (no DOM tap overlay)',
+        () {
+      final src = read('lib/features/auth/sign_in_screen.dart');
+      expect(src.contains('WebTapOverlay('), isFalse);
+    });
+
+    test('overlays park on covered routes and before first measure', () {
+      final input = read('lib/widgets/native_web_text_field_web.dart');
+      final tap = read('lib/widgets/web_tap_overlay_web.dart');
+      expect(input.contains('_route?.isCurrent'), isTrue);
+      expect(tap.contains('_route?.isCurrent'), isTrue);
+      expect(input.contains("'left:-9999px'"), isTrue);
+      expect(tap.contains("'left:-9999px'"), isTrue);
+    });
+
+    test('index.html avoids the iOS 26 legacy web-app path (taps offset '
+        'by the status bar)', () {
+      final html = read('web/index.html');
+      expect(html.contains('rel="manifest"'), isFalse);
+      expect(html.contains('name="apple-mobile-web-app-status-bar-style"'),
+          isFalse);
+      expect(html.contains('name="apple-mobile-web-app-capable"'), isFalse);
+      expect(html.contains('apple-touch-icon'), isTrue);
+    });
+
     test('text overlay sits above every tap overlay', () {
       final input = read('lib/widgets/native_web_text_field_web.dart');
       final tap = read('lib/widgets/web_tap_overlay_web.dart');

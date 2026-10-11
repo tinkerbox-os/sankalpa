@@ -30,12 +30,17 @@
   <meta http-equiv="Pragma" content="no-cache">
 
   <!-- iOS / installable web app -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <!-- black-translucent lets the ritual colour draw under the status bar in
-       standalone (Add to Home Screen) mode instead of a solid system fill. -->
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Sankalpa">
+  <!--
+    No web-app manifest link and no apple-mobile-web-app-capable /
+    status-bar-style metas, on purpose. On iOS 26 that markup puts a
+    Home Screen app on a legacy layout path whose native frame is offset by
+    the status-bar height (WebKit bug 301994): the page draws below the
+    status bar but taps land ~62pt lower, so the first tap on the email field
+    hit "Email me a code". iOS 26 still opens Home Screen sites as web apps
+    without it; the status bar is then a system strip painted from the page
+    background. manifest.json is still shipped for other browsers' installs
+    but deliberately not linked.
+  -->
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-precomposed.png">
 
@@ -49,7 +54,6 @@
   <meta property="og:type" content="website">
 
   <title>Sankalpa</title>
-  <link rel="manifest" href="manifest.json">
 
   <!--
     Boot splash. Painted by the browser before any Flutter code downloads, so

@@ -72,6 +72,7 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
   // (font load, viewport settle on launch, keyboard animation) can leave
   // the <input> somewhere other than over its Flutter box.
   Timer? _resyncTimer;
+  Route<dynamic>? _route;
   ValueListenable<double>? _keyboardInset;
 
   @override
@@ -137,6 +138,7 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _route = ModalRoute.of(context);
     final next = Scrollable.maybeOf(context)?.position;
     if (next != _scrollPosition) {
       _scrollPosition?.removeListener(_scheduleGeometrySync);
@@ -216,8 +218,10 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
     // required — inherited none from ancestors would kill the keyboard path.
     input.style.cssText = [
       'position:fixed',
-      'left:0',
-      'top:0',
+      // Parked off-screen until the first real measurement, so a default
+      // position can never cover another control.
+      'left:-9999px',
+      'top:-9999px',
       'width:100px',
       'height:56px',
       'z-index:2147483646',
@@ -340,7 +344,9 @@ class _NativeWebTextFieldViewState extends State<NativeWebTextFieldView>
     // view itself sits on the page, so a page/view offset at launch cannot
     // park the input away from its box.
     final rect = viewportRectOf(ctx.findRenderObject() as RenderBox?);
-    if (rect == null) {
+    // A route that is covered (another page or sheet on top) keeps its
+    // widgets mounted; its input must not float over the visible page.
+    if (rect == null || !(_route?.isCurrent ?? true)) {
       // Off-screen / not laid out. Park it rather than hide it: iOS refuses
       // to focus an input that is visibility:hidden at tap time.
       input.style

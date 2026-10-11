@@ -519,9 +519,11 @@ class _BottomControls extends StatelessWidget {
         ),
         SafeArea(
           top: false,
-          minimum: const EdgeInsets.only(bottom: 8),
+          minimum: const EdgeInsets.only(bottom: 16),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            // Clear of the rounded screen corners and the home indicator:
+            // 24px in from the sides, safe area + 16px up from the bottom.
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
             // Split across the bottom edge: exit on the left (deliberate
             // reach, mirrors the iOS back-gesture origin), mute on the
             // right (under the resting thumb for quick toggling without
@@ -592,15 +594,15 @@ class _MuteButtonState extends State<_MuteButton> {
             (state == ProcessingState.loading ||
                 state == ProcessingState.buffering);
         return SizedBox(
-          width: 40,
-          height: 40,
+          width: 48,
+          height: 48,
           child: Stack(
             alignment: Alignment.center,
             children: [
               if (loading)
                 const SizedBox(
-                  width: 40,
-                  height: 40,
+                  width: 48,
+                  height: 48,
                   child: CircularProgressIndicator(
                     strokeWidth: 1.5,
                     valueColor: AlwaysStoppedAnimation(Colors.white70),
@@ -640,13 +642,14 @@ class _ChromeButton extends StatelessWidget {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
+          // 48px: comfortable iOS/Material touch target.
           child: SizedBox(
-            width: 40,
-            height: 40,
+            width: 48,
+            height: 48,
             child: Icon(
               icon,
               color: Colors.white.withValues(alpha: 0.85),
-              size: 18,
+              size: 20,
             ),
           ),
         ),

@@ -40,6 +40,7 @@ class _WebTapOverlayState extends State<WebTapOverlay>
   web.HTMLElement? _el;
   JSFunction? _clickHandler;
   ScrollPosition? _scrollPosition;
+  Route<dynamic>? _route;
   bool _repositionScheduled = false;
   // Safety net against any missed layout event: a stale overlay sitting over
   // another control steals its taps (this is how the sign-in email field's
@@ -76,6 +77,7 @@ class _WebTapOverlayState extends State<WebTapOverlay>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _route = ModalRoute.of(context);
     _scrollPosition?.removeListener(_reposition);
     _scrollPosition = Scrollable.maybeOf(context)?.position;
     _scrollPosition?.addListener(_reposition);
@@ -207,7 +209,11 @@ class _WebTapOverlayState extends State<WebTapOverlay>
     // view so the overlay cannot intercept taps in unrelated areas.
     final viewSize = WidgetsBinding.instance.platformDispatcher.views.first.physicalSize /
         WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
-    final fullyOffScreen = topLeft.dy + size.height < 0 ||
+    // Covered routes stay mounted; their overlays must not catch taps meant
+    // for the page on top.
+    final covered = !(_route?.isCurrent ?? true);
+    final fullyOffScreen =
+        covered || topLeft.dy + size.height < 0 ||
         topLeft.dy > viewSize.height ||
         topLeft.dx + size.width < 0 ||
         topLeft.dx > viewSize.width;

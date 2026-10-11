@@ -14,7 +14,6 @@ import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/widgets/friendly_error.dart';
 import 'package:sankalpa/widgets/logo.dart';
 import 'package:sankalpa/widgets/native_web_text_field.dart';
-import 'package:sankalpa/widgets/web_tap_overlay.dart';
 
 /// Email sign-in via a 6-digit code.
 ///
@@ -310,20 +309,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         InlineError(error: _error!),
                       ],
                       const SizedBox(height: 16),
-                      WebTapOverlay(
-                        onTap: _sending ? null : _send,
-                        child: FilledButton(
-                          onPressed: _sending ? null : _send,
-                          child: _sending
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text('Email me a code'),
-                        ),
+                      // Plain Flutter button: no DOM tap overlay on sign-in.
+                      // A mis-placed overlay here once sat on top of the
+                      // email field and turned the first tap into a submit.
+                      FilledButton(
+                        onPressed: _sending ? null : _send,
+                        child: _sending
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Email me a code'),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -445,18 +444,15 @@ class _CodeEntry extends StatelessWidget {
           InlineError(error: error!, textAlign: TextAlign.center),
         ],
         const SizedBox(height: 16),
-        WebTapOverlay(
-          onTap: verifying ? null : onVerify,
-          child: FilledButton(
-            onPressed: verifying ? null : onVerify,
-            child: verifying
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Sign in'),
-          ),
+        FilledButton(
+          onPressed: verifying ? null : onVerify,
+          child: verifying
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Sign in'),
         ),
         const SizedBox(height: 16),
         Wrap(
