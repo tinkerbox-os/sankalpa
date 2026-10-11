@@ -442,15 +442,17 @@ class _RitualCta extends ConsumerWidget {
       ref.watch(immediateCardThemeIdProvider),
     );
     final isDark = backdrop.bg.computeLuminance() < 0.5;
-    // Slightly stronger button background than the card itself: white
-    // overlay on dark themes, black overlay on light themes. Keeps the
-    // CTA visible without forcing a separate accent colour.
     final buttonBg = isDark
         ? Colors.white.withValues(alpha: 0.10)
         : Colors.black.withValues(alpha: 0.08);
     final buttonBgPressed = isDark
         ? Colors.white.withValues(alpha: 0.18)
         : Colors.black.withValues(alpha: 0.14);
+    final effectiveCtaBg = CardBackdropTheme.alphaBlend(buttonBg, backdrop.bg);
+    final ctaFg = CardBackdropTheme.readableForeground(
+      effectiveCtaBg,
+      backdrop.text,
+    );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(Radii.lg),
@@ -524,7 +526,7 @@ class _RitualCta extends ConsumerWidget {
                           return buttonBg;
                         }),
                         foregroundColor:
-                            WidgetStatePropertyAll(backdrop.text),
+                            WidgetStatePropertyAll(ctaFg),
                         overlayColor:
                             WidgetStatePropertyAll(buttonBgPressed),
                       ),

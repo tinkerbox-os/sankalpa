@@ -797,12 +797,14 @@ class RitualCompleteScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final backdrop = CardBackdropTheme.fromId(themeId);
     final isDark = backdrop.bg.computeLuminance() < 0.5;
-    // Keep the Done button readable on both the dark mid-tones and the
-    // light pastels without introducing a third accent colour.
     final buttonBg = isDark
         ? Colors.white.withValues(alpha: 0.95)
         : Colors.black.withValues(alpha: 0.88);
-    final buttonFg = isDark ? backdrop.bg : backdrop.text;
+    final effectiveBg = CardBackdropTheme.alphaBlend(buttonBg, backdrop.bg);
+    final buttonFg = CardBackdropTheme.readableForeground(
+      effectiveBg,
+      backdrop.bg,
+    );
 
     return Scaffold(
       backgroundColor: backdrop.bg,
