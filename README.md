@@ -29,6 +29,18 @@ flutter build ios --release       # iOS native (Phase 4)
 flutter build appbundle --release # Android native (Phase 4)
 ```
 
+## Regression testing
+
+Before UI or auth/ritual changes:
+
+```bash
+./scripts/smoke_check.sh   # flutter analyze + flutter test + web keyboard policy
+./scripts/deploy.sh "msg"  # smoke -> build -> stamp -> publish to gh-pages
+```
+
+See [docs/REGRESSION.md](docs/REGRESSION.md) for the UI guards, the iPhone
+manual pass, the iOS 26 home-screen rules and the stale-build checks.
+
 ## Project layout
 
 ```
