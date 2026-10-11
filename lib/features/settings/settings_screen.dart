@@ -6,7 +6,6 @@ import 'package:sankalpa/data/audio/ritual_audio_service.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/repositories/soundscape_repository.dart';
 import 'package:sankalpa/data/repositories/user_profile_repository.dart';
-import 'package:sankalpa/widgets/card_colour_bottom_strip.dart';
 import 'package:sankalpa/widgets/card_theme_picker.dart';
 import 'package:sankalpa/widgets/soundscape_picker.dart';
 
@@ -36,7 +35,6 @@ class SettingsScreen extends ConsumerWidget {
     final cardTheme = CardBackdropTheme.fromId(effectiveThemeId);
 
     return Scaffold(
-      bottomNavigationBar: const CardColourBottomStrip(),
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8),
