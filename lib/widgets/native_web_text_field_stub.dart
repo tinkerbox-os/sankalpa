@@ -1,30 +1,45 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-/// Non-web stub: returns the child unmodified.
-class NativeWebTextField extends StatelessWidget {
-  const NativeWebTextField({
-    required this.child,
+/// Non-web stub — NativeWebTextField never calls this on VM/mobile.
+class NativeWebTextFieldView extends StatelessWidget {
+  const NativeWebTextFieldView({
     required this.controller,
     super.key,
-    this.inputType = 'text',
-    this.inputMode,
-    this.placeholder = '',
+    this.focusNode,
+    this.keyboardType,
+    this.textInputAction,
+    this.autofillHints,
+    this.autocorrect = true,
+    this.enabled = true,
     this.maxLength,
-    this.autocomplete,
-    this.textAlign = 'start',
-    this.onSubmitted,
+    this.inputFormatters,
+    this.onFieldSubmitted,
+    this.validator,
+    this.decoration,
+    this.style,
+    this.textAlign = TextAlign.start,
+    this.obscureText = false,
   });
 
-  final Widget child;
   final TextEditingController controller;
-  final String inputType;
-  final String? inputMode;
-  final String placeholder;
+  final FocusNode? focusNode;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
+  final bool autocorrect;
+  final bool enabled;
   final int? maxLength;
-  final String? autocomplete;
-  final String textAlign;
-  final ValueChanged<String>? onSubmitted;
+  final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String>? onFieldSubmitted;
+  final FormFieldValidator<String>? validator;
+  final InputDecoration? decoration;
+  final TextStyle? style;
+  final TextAlign textAlign;
+  final bool obscureText;
 
   @override
-  Widget build(BuildContext context) => child;
+  Widget build(BuildContext context) {
+    throw UnsupportedError('NativeWebTextFieldView is web-only');
+  }
 }

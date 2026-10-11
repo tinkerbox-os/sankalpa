@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sankalpa/app/platform/app_chrome.dart';
+import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/widgets/friendly_error.dart';
@@ -49,6 +51,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     super.initState();
     final initial = widget.initialError;
     _error = initial == null ? null : AppError.hint(initial);
+    // Sign-in never mounts the Safari edge-tint strips: anything fixed above
+    // the page can swallow the first tap on the email field. This also
+    // paints the status bar and page background in the scaffold colour.
+    applyScaffoldChrome(edgeTints: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) applyScaffoldChrome(edgeTints: false);
+    });
   }
 
   // Supabase enforces a per-email cooldown between code sends
@@ -244,35 +253,41 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onUseDifferentEmail: _useDifferentEmail,
                       )
                     else ...[
+                      // Real <input type="email"> on web so the iPhone
+                      // home-screen app opens the keyboard on the first tap.
+                      // The DOM input is the only thing that draws the typed
+                      // text and placeholder; Flutter draws the label above
+                      // and an empty box underneath, so nothing overlaps.
                       NativeWebTextField(
                         controller: _emailCtrl,
-                        inputType: 'email',
-                        inputMode: 'email',
-                        placeholder: 'you@example.com',
-                        autocomplete: 'email',
-                        onSubmitted: (_) => _send(),
-                        child: TextFormField(
-                          controller: _emailCtrl,
-                          focusNode: _emailFocus,
-                          keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.email],
-                          autocorrect: false,
-                          textInputAction: TextInputAction.send,
-                          onFieldSubmitted: (_) => _send(),
-                          enabled: !_sending,
-                          decoration: const InputDecoration(
-                            labelText: 'Email',
-                            hintText: 'you@example.com',
-                          ),
-                          validator: (v) {
-                            final s = (v ?? '').trim();
-                            if (s.isEmpty) return 'Enter your email';
-                            if (!s.contains('@') || !s.contains('.')) {
-                              return 'That doesn\u2019t look like an email';
-                            }
-                            return null;
-                          },
+                        focusNode: _emailFocus,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
+                        autocorrect: false,
+                        textInputAction: TextInputAction.send,
+                        onFieldSubmitted: (_) => _send(),
+                        enabled: !_sending,
+                        cursorColor: theme.colorScheme.onSurface,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                          fontSize: 16,
                         ),
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          hintText: 'you@example.com',
+                          fillColor: theme.brightness == Brightness.dark
+                              ? ChocolatePalette.surface
+                              : CreamPalette.surface,
+                          filled: true,
+                        ),
+                        validator: (v) {
+                          final s = (v ?? '').trim();
+                          if (s.isEmpty) return 'Enter your email';
+                          if (!s.contains('@') || !s.contains('.')) {
+                            return 'That doesn\u2019t look like an email';
+                          }
+                          return null;
+                        },
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 12),
@@ -369,32 +384,35 @@ class _CodeEntry extends StatelessWidget {
         const SizedBox(height: 24),
         NativeWebTextField(
           controller: codeCtrl,
-          inputMode: 'numeric',
+          focusNode: codeFocus,
+          enabled: !verifying,
+          keyboardType: TextInputType.number,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.oneTimeCode],
+          onFieldSubmitted: (_) => onVerify(),
+          // Do not auto-submit at six digits: iOS one-time-code autofill can
+          // fire input events while settling. Verification is explicit via
+          // the button below or the keyboard's Done action.
+          textAlign: TextAlign.center,
           maxLength: 6,
-          autocomplete: 'one-time-code',
-          textAlign: 'center',
-          onSubmitted: (_) => onVerify(),
-          child: TextField(
-            controller: codeCtrl,
-            focusNode: codeFocus,
-            enabled: !verifying,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.oneTimeCode],
-            onSubmitted: (_) => onVerify(),
-            textAlign: TextAlign.center,
-            maxLength: 6,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              letterSpacing: 6,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(6),
-            ],
-            decoration: const InputDecoration(
-              counterText: '',
-            ),
+          cursorColor: theme.colorScheme.onSurface,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            color: theme.colorScheme.onSurface,
+            letterSpacing: 6,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
+          // No hintText: a "000000" placeholder with wide letter-spacing
+          // looked like an entered value.
+          decoration: InputDecoration(
+            counterText: '',
+            fillColor: theme.brightness == Brightness.dark
+                ? ChocolatePalette.surface
+                : CreamPalette.surface,
+            filled: true,
           ),
         ),
         const SizedBox(height: 6),

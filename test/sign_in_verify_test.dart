@@ -170,6 +170,19 @@ void main() {
   );
 
   testWidgets(
+    'a fresh sign-in screen shows no validation error until submit',
+    (tester) async {
+      final auth = _RecordingAuthController();
+      await _pumpSignIn(tester, auth);
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('Enter your email'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets(
     'a single gesture requests one code, not two',
     (tester) async {
       // Requesting a code invalidates the previous one, so a duplicate send
