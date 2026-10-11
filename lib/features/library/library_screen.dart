@@ -13,6 +13,7 @@ import 'package:sankalpa/data/repositories/category_repository.dart';
 import 'package:sankalpa/data/repositories/manifestation_repository.dart';
 import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:sankalpa/features/library/add_edit_manifestation_screen.dart';
+import 'package:sankalpa/widgets/card_colour_bottom_strip.dart';
 import 'package:sankalpa/widgets/friendly_error.dart';
 
 /// How the library lists its manifestations when *not* in reorder mode.
@@ -151,6 +152,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      bottomNavigationBar: const CardColourBottomStrip(),
       appBar: AppBar(
         title: _reorderMode
             ? Column(
