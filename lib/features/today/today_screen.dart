@@ -12,7 +12,6 @@ import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:sankalpa/data/supabase_config.dart';
 import 'package:sankalpa/data/web/install_prompt.dart';
 import 'package:sankalpa/widgets/card_ambient_decoration.dart';
-import 'package:sankalpa/widgets/card_colour_bottom_strip.dart';
 import 'package:sankalpa/widgets/logo.dart';
 import 'package:sankalpa/widgets/soundscape_picker.dart';
 import 'package:sankalpa/widgets/web_tap_overlay.dart';
@@ -44,7 +43,6 @@ class TodayScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      bottomNavigationBar: const CardColourBottomStrip(),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
