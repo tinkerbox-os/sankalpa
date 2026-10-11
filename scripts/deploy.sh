@@ -16,6 +16,11 @@
 
 set -euo pipefail
 
+# Portable regex helpers (perl ships with macOS; ripgrep may not be installed).
+# Whole-file matching, so patterns can span lines.
+match() { PAT="$1" perl -0777 -ne 'exit(/$ENV{PAT}/ ? 0 : 1)' "$2"; }
+count_matches() { PAT="$1" perl -0777 -ne 'my $c = () = /$ENV{PAT}/g; print $c' "$2"; }
+
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
@@ -56,13 +61,13 @@ fi
 
 # The FlutterLoader source mentions serviceWorkerSettings as a parameter name;
 # only fail if our load() *call* passes it.
-if rg -U '_flutter\.loader\.load\(\s*\{[^}]*serviceWorkerSettings' \
+if match '_flutter\.loader\.load\(\s*\{[^}]*serviceWorkerSettings' \
     build/web/flutter_bootstrap.js >/dev/null; then
   echo "ERROR: flutter_bootstrap.js still registers a service worker."
   echo "       Ensure web/flutter_bootstrap.js calls _flutter.loader.load() with no SW settings."
   exit 1
 fi
-if ! rg -q '_flutter\.loader\.load\(\);' build/web/flutter_bootstrap.js; then
+if ! match '_flutter\.loader\.load\(\);' build/web/flutter_bootstrap.js; then
   echo "ERROR: expected _flutter.loader.load(); in flutter_bootstrap.js"
   exit 1
 fi
@@ -84,7 +89,7 @@ fi
 # Prove the iPhone PWA keyboard path survived dart2js (tree-shaking / a
 # mistaken TextField revert would drop this marker).
 if [ -f build/web/main.dart.js ]; then
-  rg -q 'sankalpa-overlay-input' build/web/main.dart.js \
+  match 'sankalpa-overlay-input' build/web/main.dart.js \
     || {
       echo "ERROR: built main.dart.js is missing sankalpa-overlay-input"
       echo "       Sign-in must ship the body-level DOM overlay field."
