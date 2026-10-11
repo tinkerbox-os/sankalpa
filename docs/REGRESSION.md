@@ -42,6 +42,13 @@ A green smoke check means "architecture and contrast locks hold". It does
   web, z-index above every tap overlay, never `visibility:hidden`). Sign-in
   buttons are plain Flutter buttons, with no `WebTapOverlay`.
 - Edge-tint strips are ritual-only and sit at `z-index:0`, behind Flutter.
+- Cream shell (Today, Library, Settings) has a bottom strip in the day's card
+  colour (`CardColourBottomStrip`, `Scaffold.bottomNavigationBar`,
+  `IgnorePointer`, height = bottom safe-area inset, min 24). It also keeps the
+  page background on that colour, which is what iOS samples for the top status
+  strip, so top and bottom share one source. Sign-in, ritual and completion do
+  not show it. Check: strip present on those three screens, nothing covered,
+  taps just above it still work.
 
 ## Web deploy / stale build
 
