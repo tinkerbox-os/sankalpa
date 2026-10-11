@@ -15,6 +15,11 @@ import 'package:web/web.dart' as web;
 /// and the keyboard opens. Text flows from the native element → the shared
 /// [TextEditingController] → the Flutter field underneath (which handles all
 /// Material visual rendering).
+///
+/// The overlay tracks scroll position, metric changes, and widget updates
+/// so it always stays aligned with the Flutter widget underneath. When the
+/// widget scrolls off-screen the input is parked at -9999px so it cannot
+/// intercept taps in unrelated areas.
 class NativeWebTextField extends StatefulWidget {
   const NativeWebTextField({
     required this.child,
@@ -48,6 +53,7 @@ class _NativeWebTextFieldState extends State<NativeWebTextField>
   final GlobalKey _key = GlobalKey();
   web.HTMLInputElement? _el;
   bool _syncing = false;
+  ScrollPosition? _scrollPosition;
 
   @override
   void initState() {
@@ -56,6 +62,14 @@ class _NativeWebTextFieldState extends State<NativeWebTextField>
     _createInput();
     widget.controller.addListener(_onControllerChanged);
     SchedulerBinding.instance.addPostFrameCallback((_) => _reposition());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scrollPosition?.removeListener(_reposition);
+    _scrollPosition = Scrollable.maybeOf(context)?.position;
+    _scrollPosition?.addListener(_reposition);
   }
 
   @override
@@ -70,6 +84,7 @@ class _NativeWebTextFieldState extends State<NativeWebTextField>
 
   @override
   void dispose() {
+    _scrollPosition?.removeListener(_reposition);
     widget.controller.removeListener(_onControllerChanged);
     WidgetsBinding.instance.removeObserver(this);
     _removeInput();
@@ -133,7 +148,6 @@ class _NativeWebTextFieldState extends State<NativeWebTextField>
       'text-align:${widget.textAlign}',
       'z-index:999',
       '-webkit-text-size-adjust:100%',
-      // Start off-screen until positioned.
       'left:-9999px',
       'top:-9999px',
       'width:0',
@@ -149,9 +163,26 @@ class _NativeWebTextFieldState extends State<NativeWebTextField>
     final ro = _key.currentContext?.findRenderObject();
     if (ro is! RenderBox || !ro.hasSize) return;
 
-    // Flutter logical offset from the top-left of the window.
     final topLeft = ro.localToGlobal(Offset.zero);
     final size = ro.size;
+
+    // Park off-screen when the widget has scrolled entirely out of
+    // view so the overlay cannot intercept taps in unrelated areas.
+    final viewSize = WidgetsBinding.instance.platformDispatcher.views.first.physicalSize /
+        WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+    final fullyOffScreen = topLeft.dy + size.height < 0 ||
+        topLeft.dy > viewSize.height ||
+        topLeft.dx + size.width < 0 ||
+        topLeft.dx > viewSize.width;
+
+    if (fullyOffScreen) {
+      el.style
+        ..left = '-9999px'
+        ..top = '-9999px'
+        ..width = '0'
+        ..height = '0';
+      return;
+    }
 
     // Flutter logical pixels → CSS pixels.
     // Flutter's window.devicePixelRatio applies between logical px and
@@ -159,16 +190,11 @@ class _NativeWebTextFieldState extends State<NativeWebTextField>
     // high-DPI Safari maps 1:1 to Flutter logical px (the engine sets
     // the <flt-glass-pane> transform to cancel the DPR). So we use
     // the logical coordinates directly.
-    final left = topLeft.dx;
-    final top = topLeft.dy;
-    final width = size.width;
-    final height = size.height;
-
     el.style
-      ..left = '${left}px'
-      ..top = '${top}px'
-      ..width = '${width}px'
-      ..height = '${height}px';
+      ..left = '${topLeft.dx}px'
+      ..top = '${topLeft.dy}px'
+      ..width = '${size.width}px'
+      ..height = '${size.height}px';
   }
 
   void _pullFromNative() {
@@ -190,8 +216,6 @@ class _NativeWebTextFieldState extends State<NativeWebTextField>
 
   @override
   Widget build(BuildContext context) {
-    // The child is the visual Flutter field; we assign _key so we can
-    // read its viewport rect for positioning the DOM overlay.
     return KeyedSubtree(key: _key, child: widget.child);
   }
 }
