@@ -138,6 +138,38 @@ enum CardBackdropTheme {
         (t) => t.id == id,
         orElse: () => CardBackdropTheme.chocolate,
       );
+
+  /// WCAG 2.x contrast ratio between two opaque colours (range 1–21).
+  static double contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final lighter = la > lb ? la : lb;
+    final darker = la > lb ? lb : la;
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  /// Alpha-composite [fg] over opaque [bg] (both from `dart:ui`).
+  static Color alphaBlend(Color fg, Color bg) {
+    final a = fg.a;
+    return Color.from(
+      alpha: 1,
+      red: fg.r * a + bg.r * (1 - a),
+      green: fg.g * a + bg.g * (1 - a),
+      blue: fg.b * a + bg.b * (1 - a),
+    );
+  }
+
+  /// Returns a foreground colour that meets WCAG AA (4.5 : 1) contrast on
+  /// [effectiveBg]. Prefers [themed] for visual cohesion; falls back to
+  /// whichever of black or white gives the higher contrast.
+  static Color readableForeground(Color effectiveBg, Color themed) {
+    if (contrastRatio(effectiveBg, themed) >= 4.5) return themed;
+    final withBlack = contrastRatio(effectiveBg, const Color(0xFF000000));
+    final withWhite = contrastRatio(effectiveBg, const Color(0xFFFFFFFF));
+    return withBlack > withWhite
+        ? const Color(0xFF000000)
+        : const Color(0xFFFFFFFF);
+  }
 }
 
 enum CardDecoration { sparkles, stars, orbs, none }

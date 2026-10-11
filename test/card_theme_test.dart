@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show Color;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sankalpa/app/theme/tokens.dart';
@@ -112,6 +113,49 @@ void main() {
           sql,
           contains("'${t.id}'"),
           reason: '${t.id} missing from the theme_id check constraint',
+        );
+      }
+    });
+  });
+
+  group('CTA button contrast across all CardBackdropThemes', () {
+    test(
+        'Done button label meets WCAG AA 4.5:1 on every theme '
+        '(RitualCompleteScreen)', () {
+      for (final t in CardBackdropTheme.values) {
+        final isDark = t.bg.computeLuminance() < 0.5;
+        final buttonBg = isDark
+            ? const Color(0xF2FFFFFF) // white @ 0.95 alpha
+            : const Color(0xE0000000); // black @ 0.88 alpha
+        final effectiveBg = CardBackdropTheme.alphaBlend(buttonBg, t.bg);
+        final fg = CardBackdropTheme.readableForeground(effectiveBg, t.bg);
+        final ratio = CardBackdropTheme.contrastRatio(effectiveBg, fg);
+        expect(
+          ratio,
+          greaterThanOrEqualTo(4.5),
+          reason: '${t.id} Done button: fg on bg is only '
+              '${ratio.toStringAsFixed(2)}:1',
+        );
+      }
+    });
+
+    test(
+        'Start ritual button label meets WCAG AA 4.5:1 on every theme '
+        '(TodayScreen CTA)', () {
+      for (final t in CardBackdropTheme.values) {
+        final isDark = t.bg.computeLuminance() < 0.5;
+        final buttonBg = isDark
+            ? const Color(0x1AFFFFFF) // white @ 0.10 alpha
+            : const Color(0x14000000); // black @ 0.08 alpha
+        final effectiveBg = CardBackdropTheme.alphaBlend(buttonBg, t.bg);
+        final fg =
+            CardBackdropTheme.readableForeground(effectiveBg, t.text);
+        final ratio = CardBackdropTheme.contrastRatio(effectiveBg, fg);
+        expect(
+          ratio,
+          greaterThanOrEqualTo(4.5),
+          reason: '${t.id} Start ritual: fg on bg is only '
+              '${ratio.toStringAsFixed(2)}:1',
         );
       }
     });

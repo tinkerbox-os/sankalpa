@@ -1,14 +1,19 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sankalpa/app/platform/app_chrome.dart';
+import 'package:sankalpa/app/platform/web_keyboard_inset.dart';
+import 'package:sankalpa/app/theme/tokens.dart';
 import 'package:sankalpa/data/auth/auth_providers.dart';
 import 'package:sankalpa/data/errors/app_error.dart';
 import 'package:sankalpa/widgets/friendly_error.dart';
 import 'package:sankalpa/widgets/logo.dart';
+import 'package:sankalpa/widgets/native_web_text_field.dart';
 
 /// Email sign-in via a 6-digit code.
 ///
@@ -33,6 +38,7 @@ class SignInScreen extends ConsumerStatefulWidget {
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   final _emailCtrl = TextEditingController();
+  final _emailFocus = FocusNode();
   final _codeCtrl = TextEditingController();
   final _codeFocus = FocusNode();
   final _formKey = GlobalKey<FormState>();
@@ -46,6 +52,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     super.initState();
     final initial = widget.initialError;
     _error = initial == null ? null : AppError.hint(initial);
+    // Sign-in never mounts the Safari edge-tint strips: anything fixed above
+    // the page can swallow the first tap on the email field. This also
+    // paints the status bar and page background in the scaffold colour.
+    applyScaffoldChrome(edgeTints: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) applyScaffoldChrome(edgeTints: false);
+    });
   }
 
   // Supabase enforces a per-email cooldown between code sends
@@ -65,6 +78,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     _cooldownTicker?.cancel();
     _cooldownSeconds.dispose();
     _emailCtrl.dispose();
+    _emailFocus.dispose();
     _codeCtrl.dispose();
     _codeFocus.dispose();
     super.dispose();
@@ -199,7 +213,21 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       body: SafeArea(
-        child: Center(
+        // The keyboard opened by the DOM inputs does not resize Flutter's
+        // view on iOS, so make room for it ourselves; the focused field then
+        // scrolls into the space above the keyboard.
+        child: ValueListenableBuilder<double>(
+          valueListenable: WebKeyboardInset.listenable,
+          builder: (context, inset, child) => Padding(
+            padding: EdgeInsets.only(
+              bottom: math.max(
+                0,
+                inset - MediaQuery.viewPaddingOf(context).bottom,
+              ),
+            ),
+            child: child,
+          ),
+          child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420),
             child: SingleChildScrollView(
@@ -240,17 +268,32 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         onUseDifferentEmail: _useDifferentEmail,
                       )
                     else ...[
-                      TextFormField(
+                      // Real <input type="email"> on web so the iPhone
+                      // home-screen app opens the keyboard on the first tap.
+                      // The DOM input is the only thing that draws the typed
+                      // text and placeholder; Flutter draws the label above
+                      // and an empty box underneath, so nothing overlaps.
+                      NativeWebTextField(
                         controller: _emailCtrl,
+                        focusNode: _emailFocus,
                         keyboardType: TextInputType.emailAddress,
                         autofillHints: const [AutofillHints.email],
                         autocorrect: false,
                         textInputAction: TextInputAction.send,
                         onFieldSubmitted: (_) => _send(),
                         enabled: !_sending,
-                        decoration: const InputDecoration(
+                        cursorColor: theme.colorScheme.onSurface,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                          fontSize: 16,
+                        ),
+                        decoration: InputDecoration(
                           labelText: 'Email',
                           hintText: 'you@example.com',
+                          fillColor: theme.brightness == Brightness.dark
+                              ? ChocolatePalette.surface
+                              : CreamPalette.surface,
+                          filled: true,
                         ),
                         validator: (v) {
                           final s = (v ?? '').trim();
@@ -266,6 +309,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                         InlineError(error: _error!),
                       ],
                       const SizedBox(height: 16),
+                      // Plain Flutter button: no DOM tap overlay on sign-in.
+                      // A mis-placed overlay here once sat on top of the
+                      // email field and turned the first tap into a submit.
                       FilledButton(
                         onPressed: _sending ? null : _send,
                         child: _sending
@@ -289,6 +335,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 ),
               ),
             ),
+          ),
           ),
         ),
       ),
@@ -351,39 +398,37 @@ class _CodeEntry extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        TextField(
+        NativeWebTextField(
           controller: codeCtrl,
           focusNode: codeFocus,
           enabled: !verifying,
-          // Numeric keypad on mobile; long-press still surfaces the
-          // system clipboard menu so pasting a code from email works.
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.oneTimeCode],
-          onSubmitted: (_) => onVerify(),
-          // Do not auto-submit at six digits. In particular, iOS one-time-code
-          // autofill can invoke onChanged while its platform editing state is
-          // still settling. That creates a hidden verification attempt before
-          // the user taps Sign in, making a subsequent failure look like the
-          // first attempt. Verification is deliberately explicit: the button
-          // below or the keyboard's Done action.
+          onFieldSubmitted: (_) => onVerify(),
+          // Do not auto-submit at six digits: iOS one-time-code autofill can
+          // fire input events while settling. Verification is explicit via
+          // the button below or the keyboard's Done action.
           textAlign: TextAlign.center,
           maxLength: 6,
+          cursorColor: theme.colorScheme.onSurface,
           style: theme.textTheme.headlineSmall?.copyWith(
+            color: theme.colorScheme.onSurface,
             letterSpacing: 6,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
           inputFormatters: [
-            // Strip anything non-digit on the fly so a paste of
-            // "  123 456 " collapses cleanly to "123456".
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(6),
           ],
-          decoration: const InputDecoration(
+          // No hintText: a "000000" placeholder with wide letter-spacing
+          // looked like an entered value.
+          decoration: InputDecoration(
             counterText: '',
-            // No hintText — the prior "000000" placeholder looked like
-            // a real entered value because of the wide letter-spacing.
-            // The label below the field tells the user what to do.
+            fillColor: theme.brightness == Brightness.dark
+                ? ChocolatePalette.surface
+                : CreamPalette.surface,
+            filled: true,
           ),
         ),
         const SizedBox(height: 6),

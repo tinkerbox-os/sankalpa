@@ -102,4 +102,35 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'completion screen sets browser theme to the card colour',
+    (tester) async {
+      BrowserThemeColorRecord.reset();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RitualCompleteScreen(
+            cardsRead: 3,
+            duration: const Duration(seconds: 14),
+            themeId: 'mint',
+            onDone: () {},
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        BrowserThemeColorRecord.calls.isNotEmpty,
+        isTrue,
+        reason: 'completion screen must set browser chrome to the card colour',
+      );
+      final lastCall = BrowserThemeColorRecord.calls.last;
+      expect(lastCall.edgeTints, isTrue);
+      expect(
+        lastCall.cssColor.toUpperCase(),
+        contains('B8D4C6'),
+        reason: 'browser chrome should be mint, not cream',
+      );
+    },
+  );
 }

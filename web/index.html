@@ -23,14 +23,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="Sankalpa — a daily ritual for your manifestations.">
   <meta name="theme-color" content="#EADFD0">
+  <!-- Rewritten by scripts/deploy.sh. Used to force-drop stale SW caches. -->
+  <meta name="sankalpa-build" content="dev">
+  <!-- GitHub Pages caches HTML (~10m). Ask browsers not to keep a stale shell. -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
 
   <!-- iOS / installable web app -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <!-- black-translucent lets the ritual colour draw under the status bar in
-       standalone (Add to Home Screen) mode instead of a solid system fill. -->
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Sankalpa">
+  <!--
+    No web-app manifest link and no apple-mobile-web-app-capable /
+    status-bar-style metas, on purpose. On iOS 26 that markup puts a
+    Home Screen app on a legacy layout path whose native frame is offset by
+    the status-bar height (WebKit bug 301994): the page draws below the
+    status bar but taps land ~62pt lower, so the first tap on the email field
+    hit "Email me a code". iOS 26 still opens Home Screen sites as web apps
+    without it; the status bar is then a system strip painted from the page
+    background. manifest.json is still shipped for other browsers' installs
+    but deliberately not linked.
+  -->
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="apple-touch-icon-precomposed" sizes="180x180" href="apple-touch-icon-precomposed.png">
 
@@ -44,7 +54,6 @@
   <meta property="og:type" content="website">
 
   <title>Sankalpa</title>
-  <link rel="manifest" href="manifest.json">
 
   <!--
     Boot splash. Painted by the browser before any Flutter code downloads, so
@@ -63,6 +72,9 @@
       position: fixed;
       inset: 0;
       z-index: 9999;
+      /* Never intercept taps — a stuck splash blocked the email field /
+         keyboard on iOS home-screen launches. */
+      pointer-events: none;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -213,6 +225,9 @@
         if (done) return;
         done = true;
         splash.classList.add('is-hidden');
+        // Also force display:none immediately so the node cannot
+        // intercept taps even before the removal timer fires.
+        splash.style.display = 'none';
         window.setTimeout(function () {
           if (splash.parentNode) splash.parentNode.removeChild(splash);
         }, 400);
@@ -224,45 +239,110 @@
     })();
   </script>
 
-  <script src="flutter_bootstrap.js" async></script>
   <script>
-    // PWA is paused for now. To eliminate stale-bundle bugs while we finish
-    // stabilising the app, aggressively unregister any existing service
-    // worker for this origin and wipe Sankalpa/Flutter caches, then let the
-    // app run as a plain web app with fresh network loads.
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async function () {
-        const cleanupKey = 'sankalpa-sw-cleaned-v1';
-        try {
-          const regs = await navigator.serviceWorker.getRegistrations();
+    // iOS standalone PWA: WebKit sometimes leaves a dead touch zone / broken
+    // keyboard path until the visual viewport is reset. Passive reset on focusout
+    // (keyboard dismiss) and install a capture-phase touchstart so the first
+    // tap on overlay inputs still counts as user activation.
+    (function () {
+      var isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      var isStandalone = window.navigator.standalone === true ||
+        window.matchMedia('(display-mode: standalone)').matches;
+      if (!isIos || !isStandalone) return;
+
+      var reset = function () {
+        requestAnimationFrame(function () {
+          window.scrollTo(0, 0);
+          document.documentElement.scrollTop = 0;
+          document.body.scrollTop = 0;
+        });
+      };
+      var noop = function () {};
+      window.addEventListener('touchstart', noop, { capture: true, passive: true });
+      document.addEventListener('touchstart', noop, { capture: true, passive: true });
+      window.addEventListener('pageshow', reset);
+      window.addEventListener('orientationchange', reset);
+      window.addEventListener('focusout', reset, true);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', reset);
+      }
+      reset();
+    })();
+  </script>
+
+  <script>
+    // Run BEFORE flutter_bootstrap.js. Old Flutter / Sankalpa service workers
+    // and Safari HTTP cache pin stale main.dart.js on iOS home-screen installs.
+    //
+    // assetGen bumps when cache logic itself changes so every device runs one
+    // more nuke+reload even if sankalpa-build already matched.
+    (function () {
+      var meta = document.querySelector('meta[name="sankalpa-build"]');
+      var build = (meta && meta.content) || 'dev';
+      var assetGen = 'c5';
+      var fullStamp = build + '.' + assetGen;
+      var seenKey = 'sankalpa-build-seen';
+      var busting = false;
+
+      function loadFlutter() {
+        var s = document.createElement('script');
+        // Query bust — GitHub Pages / Safari will keep flutter_bootstrap.js
+        // for minutes without this, even after Cache Storage is wiped.
+        s.src = 'flutter_bootstrap.js?v=' + encodeURIComponent(fullStamp);
+        s.async = true;
+        document.body.appendChild(s);
+      }
+
+      async function nukeCaches() {
+        if ('serviceWorker' in navigator) {
+          var regs = await navigator.serviceWorker.getRegistrations();
           await Promise.all(regs.map(function (r) { return r.unregister(); }));
+          // Drop any controlling worker so the next navigation is network-first.
+          if (navigator.serviceWorker.controller) {
+            try {
+              navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+            } catch (_) {}
+          }
+        }
+        if ('caches' in window) {
+          var keys = await caches.keys();
+          await Promise.all(keys.map(function (key) { return caches.delete(key); }));
+        }
+      }
 
-          if ('caches' in window) {
-            const keys = await caches.keys();
-            await Promise.all(
-              keys
-                .filter(function (key) {
-                  return key.indexOf('sankalpa-') === 0 ||
-                    key.indexOf('flutter-app-cache') !== -1 ||
-                    key.indexOf('flutter-temp-cache') !== -1 ||
-                    key.indexOf('flutter_assets') !== -1;
-                })
-                .map(function (key) { return caches.delete(key); }),
-            );
+      window.addEventListener('load', async function () {
+        try {
+          var seen = null;
+          try { seen = localStorage.getItem(seenKey); } catch (_) {}
+          var url = new URL(window.location.href);
+          var urlStamp = url.searchParams.get('_b');
+
+          if (seen !== fullStamp || urlStamp !== fullStamp) {
+            busting = true;
+            await nukeCaches();
+            // Drop the previous seen key generations so a half-updated tab
+            // cannot skip the next deploy's bust.
+            try {
+              localStorage.removeItem('sankalpa-build-seen');
+              localStorage.setItem(seenKey, fullStamp);
+            } catch (_) {}
+            url.searchParams.set('_b', fullStamp);
+            window.location.replace(url.toString());
+            return;
           }
 
-          // Force exactly one clean reload after cache cleanup so the page
-          // immediately reboots from the network instead of continuing to run
-          // the stale JS bundle that was already in memory.
-          if (!sessionStorage.getItem(cleanupKey)) {
-            sessionStorage.setItem(cleanupKey, '1');
-            window.location.reload();
-          }
+          // Matching stamp: still unregister any SW that sneaks back, then
+          // load a query-busted bootstrap (main.dart.js is also ?v=-stamped
+          // by deploy.sh inside flutter_bootstrap.js).
+          await nukeCaches();
         } catch (err) {
           console.warn('SW cleanup failed:', err);
+        } finally {
+          if (!busting) loadFlutter();
         }
       });
-    }
+    })();
   </script>
 </body>
 </html>

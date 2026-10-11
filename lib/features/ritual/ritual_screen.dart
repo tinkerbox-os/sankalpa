@@ -16,9 +16,17 @@ import 'package:sankalpa/data/repositories/session_repository.dart';
 import 'package:sankalpa/data/repositories/soundscape_repository.dart';
 import 'package:sankalpa/data/repositories/user_profile_repository.dart';
 import 'package:sankalpa/widgets/card_ambient_decoration.dart';
+import 'package:sankalpa/widgets/web_tap_overlay.dart';
 
 /// Full-screen daily ritual. Auto-plays a soundscape, shows manifestations
 /// one card at a time, and records a `sessions` row on completion.
+
+/// Converts a [Color] to a `#RRGGBB` CSS hex string.
+String cssColorHex(Color color) {
+  final rgb = color.toARGB32() & 0x00FFFFFF;
+  return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+}
+
 ///
 /// UX rules from the brief:
 /// - Tap or swipe to advance. No auto-advance — user controls pace.
@@ -120,10 +128,7 @@ class _RitualScreenState extends ConsumerState<RitualScreen> {
     );
   }
 
-  String _cssColor(Color color) {
-    final rgb = color.toARGB32() & 0x00FFFFFF;
-    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
-  }
+  String _cssColor(Color color) => cssColorHex(color);
 
   Future<void> _onPageChanged(int i) async {
     setState(() {
@@ -514,9 +519,11 @@ class _BottomControls extends StatelessWidget {
         ),
         SafeArea(
           top: false,
-          minimum: const EdgeInsets.only(bottom: 8),
+          minimum: const EdgeInsets.only(bottom: 16),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+            // Clear of the rounded screen corners and the home indicator:
+            // 24px in from the sides, safe area + 16px up from the bottom.
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
             // Split across the bottom edge: exit on the left (deliberate
             // reach, mirrors the iOS back-gesture origin), mute on the
             // right (under the resting thumb for quick toggling without
@@ -587,15 +594,15 @@ class _MuteButtonState extends State<_MuteButton> {
             (state == ProcessingState.loading ||
                 state == ProcessingState.buffering);
         return SizedBox(
-          width: 40,
-          height: 40,
+          width: 48,
+          height: 48,
           child: Stack(
             alignment: Alignment.center,
             children: [
               if (loading)
                 const SizedBox(
-                  width: 40,
-                  height: 40,
+                  width: 48,
+                  height: 48,
                   child: CircularProgressIndicator(
                     strokeWidth: 1.5,
                     valueColor: AlwaysStoppedAnimation(Colors.white70),
@@ -635,13 +642,14 @@ class _ChromeButton extends StatelessWidget {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
+          // 48px: comfortable iOS/Material touch target.
           child: SizedBox(
-            width: 40,
-            height: 40,
+            width: 48,
+            height: 48,
             child: Icon(
               icon,
               color: Colors.white.withValues(alpha: 0.85),
-              size: 18,
+              size: 20,
             ),
           ),
         ),
@@ -771,7 +779,7 @@ class _ErrorView extends StatelessWidget {
 /// as the ritual itself — no jarring jump back to a bright sheet.
 ///
 /// Public so widget tests can guard against hard-coding chocolate here.
-class RitualCompleteScreen extends StatelessWidget {
+class RitualCompleteScreen extends StatefulWidget {
   const RitualCompleteScreen({
     required this.cardsRead,
     required this.duration,
@@ -785,6 +793,29 @@ class RitualCompleteScreen extends StatelessWidget {
   final String themeId;
   final VoidCallback onDone;
 
+  @override
+  State<RitualCompleteScreen> createState() => _RitualCompleteScreenState();
+}
+
+class _RitualCompleteScreenState extends State<RitualCompleteScreen> {
+  @override
+  void initState() {
+    super.initState();
+    final bg = CardBackdropTheme.fromId(widget.themeId).bg;
+    setBrowserThemeColor(cssColorHex(bg), edgeTints: true);
+    final iconBrightness =
+        bg.computeLuminance() > 0.5 ? Brightness.dark : Brightness.light;
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: bg,
+        statusBarIconBrightness: iconBrightness,
+        statusBarBrightness: iconBrightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark,
+      ),
+    );
+  }
+
   String _formatDuration(Duration d) {
     if (d.inMinutes < 1) return '${d.inSeconds}s';
     final m = d.inMinutes;
@@ -794,14 +825,16 @@ class RitualCompleteScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final backdrop = CardBackdropTheme.fromId(themeId);
+    final backdrop = CardBackdropTheme.fromId(widget.themeId);
     final isDark = backdrop.bg.computeLuminance() < 0.5;
-    // Keep the Done button readable on both the dark mid-tones and the
-    // light pastels without introducing a third accent colour.
     final buttonBg = isDark
         ? Colors.white.withValues(alpha: 0.95)
         : Colors.black.withValues(alpha: 0.88);
-    final buttonFg = isDark ? backdrop.bg : backdrop.text;
+    final effectiveBg = CardBackdropTheme.alphaBlend(buttonBg, backdrop.bg);
+    final buttonFg = CardBackdropTheme.readableForeground(
+      effectiveBg,
+      backdrop.bg,
+    );
 
     return Scaffold(
       backgroundColor: backdrop.bg,
@@ -814,66 +847,75 @@ class RitualCompleteScreen extends StatelessWidget {
             intensity: 0.55,
           ),
           CardVignette(dark: isDark),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
-              child: Column(
-                children: [
-                  const Spacer(flex: 2),
-                  Icon(
-                    Icons.auto_awesome,
-                    size: 56,
-                    color: Accents.gold.withValues(alpha: 0.95),
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Beautiful.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: backdrop.text,
-                      fontFamily: 'Fraunces',
-                      fontSize: 36,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 0.2,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onDone,
+            child: SafeArea(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+                child: Column(
+                  children: [
+                    const Spacer(flex: 2),
+                    Icon(
+                      Icons.auto_awesome,
+                      size: 56,
+                      color: Accents.gold.withValues(alpha: 0.95),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'You showed up for $cardsRead manifestation${cardsRead == 1 ? '' : 's'}\nin ${_formatDuration(duration)}.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: backdrop.text.withValues(alpha: 0.72),
-                      fontFamily: 'Inter',
-                      fontSize: 15,
-                      height: 1.5,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  const Spacer(flex: 3),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: buttonBg,
-                        foregroundColor: buttonFg,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      onPressed: onDone,
-                      child: const Text(
-                        'Done',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.4,
-                        ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Beautiful.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: backdrop.text,
+                        fontFamily: 'Fraunces',
+                        fontSize: 36,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.2,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                    const SizedBox(height: 14),
+                    Text(
+                      'You showed up for ${widget.cardsRead} manifestation${widget.cardsRead == 1 ? '' : 's'}\nin ${_formatDuration(widget.duration)}.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: backdrop.text.withValues(alpha: 0.72),
+                        fontFamily: 'Inter',
+                        fontSize: 15,
+                        height: 1.5,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    const Spacer(flex: 3),
+                    SizedBox(
+                      width: double.infinity,
+                      child: WebTapOverlay(
+                        onTap: widget.onDone,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: buttonBg,
+                            foregroundColor: buttonFg,
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          onPressed: widget.onDone,
+                          child: const Text(
+                            'Done',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
             ),
           ),
